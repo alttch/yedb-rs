@@ -71,7 +71,15 @@ fn main() {
 }
 ```
 
-## Specifications
+## Cargo crate
+
+[crates.io/crates/yedb](https://crates.io/crates/yedb)
+
+## Client/server binaries
+
+Available at [releases page](https://github.com/alttch/yedb-rs/releases).
+
+## Specification
 
 [www.yedb.org](https://www.yedb.org/)
 
