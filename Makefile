@@ -39,9 +39,9 @@ publish-cargo-crate:
 pkg:
 	rm -rf _build
 	mkdir -p _build
-	#cross build --target x86_64-unknown-linux-musl --release
-	#cross build --target i686-unknown-linux-musl --release
-	#cross build --target arm-unknown-linux-musleabihf --release
+	cross build --target x86_64-unknown-linux-musl --release
+	cross build --target i686-unknown-linux-musl --release
+	cross build --target arm-unknown-linux-musleabihf --release
 	cd target/x86_64-unknown-linux-musl/release && tar czvf ../../../_build/yedb-${VERSION}-x86_64-musl.tar.gz yedb-server yedb-cli
 	cd target/i686-unknown-linux-musl/release && tar czvf ../../../_build/yedb-${VERSION}-i686-musl.tar.gz yedb-server yedb-cli
 	cd target/arm-unknown-linux-musleabihf/release && tar czvf ../../../_build/yedb-${VERSION}-arm-musleabihf.tar.gz yedb-server yedb-cli
