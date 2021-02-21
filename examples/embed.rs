@@ -1,8 +1,8 @@
-//use yedb::{Database, ErrorKind};
+use yedb::Database;
 use serde_json::Value;
 
 fn main() {
-    let mut db = yedb::Database::new();
+    let mut db = Database::new();
     db.set_db_path(&"/tmp/db1").unwrap();
     db.open().unwrap();
     let key_name = "test/key1";
