@@ -53,9 +53,10 @@ impl BenchmarkOp {
 
 fn benchmark(db: &mut YedbClient, nt: usize) {
     let n = 10_000;
+    let i = db.info().unwrap();
+    let old_cache_size = i.cache_size;
     db.key_delete_recursive(".benchmark").unwrap();
     db.server_set("cache_size", Value::from(n * 4)).unwrap();
-    db.server_set("auto_flush", Value::from(false)).unwrap();
     let test_number = Value::from(777.777);
     let mut test_string = String::new();
     for _ in 0..1000 {
@@ -151,6 +152,8 @@ fn benchmark(db: &mut YedbClient, nt: usize) {
     println!();
     println!("Cleaning up...");
     db.purge().unwrap();
+    db.server_set("cache_size", Value::from(old_cache_size))
+        .unwrap();
 }
 
 #[derive(Clap)]
