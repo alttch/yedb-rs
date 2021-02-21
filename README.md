@@ -46,7 +46,7 @@ use serde_json::Value;
 
 fn main() {
     let mut db = yedb::Database::new();
-    db.set_db_path(&"/tmp/db1").unwrap();
+    db.set_db_path("/tmp/db1").unwrap();
     db.open().unwrap();
     let key_name = "test/key1";
     db.key_set(&key_name, Value::from(123u8)).unwrap();
