@@ -62,6 +62,8 @@ Use client:
 ./yedb-cli edit x
 # get key as JSON
 ./yedb-cli get x
+# get help for all commands
+./yedb-cli -h
 ```
 
 ## Embedded example
