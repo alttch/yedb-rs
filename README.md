@@ -38,6 +38,32 @@ the engine but is not recommended - why then YEDB is used for).
 - The command-line client is very basic. If you need more features, use [yedb
   Python CLI](https://github.com/alttch/yedb-py).
 
+## Client/server
+
+Binaries available at the [releases
+page](https://github.com/alttch/yedb-rs/releases).
+
+Run server:
+
+```
+./yedb-server /tmp/db1
+```
+
+Use client:
+
+```
+# get server info
+./yedb-cli info
+# set key value
+./yedb-cli set x 5 -p number
+# list all keys
+./yedb-cli ls /
+# edit key with $EDITOR
+./yedb-cli edit x
+# get key as JSON
+./yedb-cli get x
+```
+
 ## Embedded example
 
 ```rust
@@ -74,10 +100,6 @@ fn main() {
 ## Cargo crate
 
 [crates.io/crates/yedb](https://crates.io/crates/yedb)
-
-## Client/server binaries
-
-Available at [releases page](https://github.com/alttch/yedb-rs/releases).
 
 ## Specification
 
