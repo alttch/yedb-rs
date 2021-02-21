@@ -7,7 +7,7 @@ use std::os::unix::net::UnixStream;
 
 use std::time::Duration;
 
-use yedb_common::*;
+use super::common::{DBInfo, Error, ErrorKind, JSONRpcRequest, JSONRpcResponse, KeyExplained};
 
 macro_rules! unwrap_io {
     ( $e:expr ) => {

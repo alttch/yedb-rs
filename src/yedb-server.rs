@@ -8,7 +8,8 @@ use tokio::sync::RwLock;
 
 use std::vec::Vec;
 
-use yedb::Database;
+use yedb::*;
+use yedb::common::JSONRpcRequest;
 
 use rmp_serde;
 use serde_json;
@@ -29,9 +30,60 @@ lazy_static! {
     pub static ref DBCELL: RwLock<Database> = RwLock::new(yedb::Database::new());
 }
 
-use yedb_common::*;
-
 struct SimpleLogger;
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum YedbServerErrorKind {
+    Critical,
+    #[allow(dead_code)]
+    Other,
+}
+
+#[macro_export]
+macro_rules! parse_jsonrpc_request_param {
+    ($r:expr, $k:expr, $p:path) => {
+        match $r.params.get($k) {
+            Some(v) => match v {
+                $p(v) => Some(v),
+                _ => None,
+            },
+            None => None,
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! encode_jsonrpc_response {
+    ($v:expr) => {
+        match rmp_serde::to_vec_named(&$v) {
+            Ok(v) => v,
+            Err(e) => {
+                error!("Response encode error {}", e);
+                return Err(YedbServerErrorKind::Critical);
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! parse_result_for_jsonrpc {
+    ($v:expr, $r:expr) => {
+        match $v {
+            Ok(value) => encode_jsonrpc_response!($r.respond(value)),
+            Err(e) => encode_jsonrpc_response!($r.error(e)),
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! parse_result_for_jsonrpc_ok {
+    ($v:expr, $r:expr) => {
+        match $v {
+            Ok(_) => encode_jsonrpc_response!($r.respond_ok()),
+            Err(e) => encode_jsonrpc_response!($r.error(e)),
+        }
+    };
+}
 
 impl log::Log for SimpleLogger {
     fn enabled(&self, metadata: &Metadata) -> bool {

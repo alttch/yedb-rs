@@ -4,7 +4,8 @@ all: test
 
 test:
 	cargo build
-	./target/debug/yedb-server /tmp/yedb-test-db1 --pid-file /tmp/yedb-server-test.pid &
+	./target/debug/yedb-server /tmp/yedb-test-db1 --pid-file /tmp/yedb-server-test.pid -v &
+	sleep 0.1
 	#cargo test -- --test-threads=1 --nocapture
 	cargo test -- --nocapture
 	kill `cat /tmp/yedb-server-test.pid`

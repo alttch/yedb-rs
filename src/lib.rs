@@ -133,9 +133,9 @@ impl ExplainValue for Value {
     }
 }
 
-use yedb_common::*;
-
-pub use yedb_common::ErrorKind;
+#[path = "common.rs"]
+pub mod common;
+pub use common::{ErrorKind, Error, KeyExplained, DBInfo};
 
 #[path = "client.rs"]
 pub mod client;
@@ -1311,8 +1311,6 @@ impl Database {
         self._delete_key(key, true, false, false)
     }
 
-    // TODO cargo docs
-    // TODO remove warnings and release
     // TODO context
     // TODO convert_fmt()
 

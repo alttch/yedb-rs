@@ -38,8 +38,6 @@ clap = "3.0.0-beta.2"
 getch = "0.2.1"
 prettytable-rs = "0.8.0"
 
-yedb_common = { path = "lib/yedb_common" }
-
 [[bin]]
 name = "yedb-server"
 path = "src/yedb-server.rs"
@@ -47,10 +45,6 @@ path = "src/yedb-server.rs"
 [[bin]]
 name = "yedb-cli"
 path = "src/yedb-cli.rs"
-
-#[[bin]]
-#name = "test_ctx"
-#path = "src/test-ctx.rs"
 
 [[example]]
 name = "embed"

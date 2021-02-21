@@ -13,7 +13,6 @@ use colored::Colorize;
 use std::time::Instant;
 
 use yedb::*;
-use yedb_common::*;
 
 use clap::Clap;
 use getch;
@@ -326,7 +325,7 @@ fn format_value(value: String, p: SetType) -> Result<Value, Error> {
     }
 }
 
-fn output_result<T: std::fmt::Display>(result: Result<T, yedb_common::Error>) -> i32 {
+fn output_result<T: std::fmt::Display>(result: Result<T, Error>) -> i32 {
     match result {
         Ok(v) => {
             output_value(v);
@@ -343,7 +342,7 @@ fn print_ok() {
     println!("{}", format!("{}", "OK".green().bold()));
 }
 
-fn output_result_ok(result: Result<(), yedb_common::Error>) -> i32 {
+fn output_result_ok(result: Result<(), Error>) -> i32 {
     match result {
         Ok(_) => {
             print_ok();
