@@ -9,7 +9,7 @@ test:
 	#cargo test -- --test-threads=1 --nocapture
 	cargo test -- --nocapture
 	kill `cat /tmp/yedb-server-test.pid`
-	sleep 0.1
+	sleep 0.5
 	rm -rf /tmp/yedb-test-db1
 
 clean:
