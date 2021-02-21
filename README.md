@@ -90,6 +90,8 @@ Available at [releases page](https://github.com/alttch/yedb-rs/releases).
 
 - auto\_flush: false
 - connection: Unix socket
+- server workers: 2
+- client threads: 4
 
 ```
 set/number: 8164 ops/sec
