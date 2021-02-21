@@ -46,4 +46,4 @@ pkg:
 	cd target/i686-unknown-linux-musl/release && tar czvf ../../../_build/yedb-${VERSION}-i686-musl.tar.gz yedb-server yedb-cli
 	cd target/arm-unknown-linux-musleabihf/release && tar czvf ../../../_build/yedb-${VERSION}-arm-musleabihf.tar.gz yedb-server yedb-cli
 	cd _build && echo "" | gh release create v$(VERSION) -t "v$(VERSION)" \
-			yedb-0.0.1-arm-musleabihf.tar.gz yedb-0.0.1-i686-musl.tar.gz yedb-0.0.1-x86_64-musl.tar.gz
+			yedb-${VERSION}-arm-musleabihf.tar.gz yedb-${VERSION}-i686-musl.tar.gz yedb-${VERSION}-x86_64-musl.tar.gz
