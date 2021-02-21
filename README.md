@@ -89,6 +89,7 @@ Available at [releases page](https://github.com/alttch/yedb-rs/releases).
 * Drive: Samsung MZVLB512HAJQ-000L7 (NVMe)
 
 - auto\_flush: false
+- connection: Unix socket
 
 ```
 set/number: 8164 ops/sec
