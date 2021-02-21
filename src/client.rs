@@ -70,28 +70,29 @@ enum ClientStream {
 
 impl ClientStream {
     fn set_timeout(&mut self, timeout: Duration) -> Result<(), std::io::Error> {
-        return match self {
-            ClientStream::TCP(v) => match v.set_read_timeout(Some(timeout)) {
-                Ok(_) => v.set_write_timeout(Some(timeout)),
-                Err(e) => Err(e),
-            },
-            ClientStream::Unix(v) => match v.set_read_timeout(Some(timeout)) {
-                Ok(_) => v.set_write_timeout(Some(timeout)),
-                Err(e) => Err(e),
-            },
-        };
+        match self {
+            ClientStream::TCP(v) => {
+                v.set_read_timeout(Some(timeout))?;
+                v.set_write_timeout(Some(timeout))?;
+            }
+            ClientStream::Unix(v) => {
+                v.set_read_timeout(Some(timeout))?;
+                v.set_write_timeout(Some(timeout))?;
+            }
+        }
+        Ok(())
     }
     fn read_exact(&mut self, buf: &mut [u8]) -> Result<(), std::io::Error> {
-        return match self {
+        match self {
             ClientStream::TCP(v) => v.read_exact(buf),
             ClientStream::Unix(v) => v.read_exact(buf),
-        };
+        }
     }
     fn write_all(&mut self, buf: &[u8]) -> Result<(), std::io::Error> {
-        return match self {
+        match self {
             ClientStream::TCP(v) => v.write_all(buf),
             ClientStream::Unix(v) => v.write_all(buf),
-        };
+        }
     }
 }
 

@@ -1,49 +1,49 @@
 //! # yedb - rugged embedded and client/server key-value database (Rust implementation)
-//! 
+//!
 //! ## Why YEDB?
-//! 
+//!
 //! - Is it fast?
 //! - Rust version is pretty fast, except writes are still slow if auto-flush is
 //!   enabled.
-//! 
+//!
 //! - Is it smart?
 //! - No
-//! 
+//!
 //! - So what is YEDB for?
 //! - YEDB is ultra-reliable, thread-safe and very easy to use.
-//! 
+//!
 //! - I don't like Rust
 //! - There are other [implementations](https://www.yedb.org)
-//! 
+//!
 //! YEDB is absolutely reliable rugged key-value database, which can survive in any
 //! power loss, unless the OS file system die. Keys data is saved in the very
 //! reliable way and immediately flushed to disk (this can be disabled to speed up
 //! the engine but is not recommended - why then YEDB is used for).
-//! 
+//!
 //! ## Rust version features
-//! 
+//!
 //! - Rust version is built on top of [Serde](https://serde.rs) framework.
-//! 
+//!
 //! - All key values are *serde_json::Value* objects.
-//! 
+//!
 //! - Storage serialization formats supported: JSON (default), YAML, MessagePack
 //!   and CBOR.
-//! 
+//!
 //! - As binary type is not supported by *serde_json::Value* at this moment, Rust
 //!   version can not handle binary key values.
-//! 
+//!
 //! - Contains: embedded library, async server and command-line client (TCP/Unix
 //!   socket only).
-//! 
+//!
 //! - The command-line client is very basic. If you need more features, use [yedb
 //!   Python CLI](https://github.com/alttch/yedb-py).
-//! 
+//!
 //! ## Embedded example
-//! 
+//!
 //! ```rust
 //! use yedb::Database;
 //! use serde_json::Value;
-//! 
+//!
 //! fn main() {
 //!     let mut db = yedb::Database::new();
 //!     db.set_db_path(&"/tmp/db1").unwrap();
@@ -55,13 +55,13 @@
 //!     db.close().unwrap();
 //! }
 //! ```
-//! 
+//!
 //! ## TCP client example
-//! 
+//!
 //! ```rust
 //! use yedb::YedbClient;
 //! use serde_json::Value;
-//! 
+//!
 //! fn main() {
 //!     let mut db = yedb::YedbClient::new("tcp://127.0.0.1:8870");
 //!     let key_name = "test/key1";
@@ -70,19 +70,19 @@
 //!     db.key_delete(&key_name).unwrap();
 //! }
 //! ```
-//! 
+//!
 //! ## Cargo crate
-//! 
+//!
 //! [crates.io/crates/yedb](https://crates.io/crates/yedb)
-//! 
+//!
 //! ## Client/server binaries
-//! 
+//!
 //! Available at [releases page](https://github.com/alttch/yedb-rs/releases).
-//! 
+//!
 //! ## Specification
-//! 
+//!
 //! [www.yedb.org](https://www.yedb.org/)
-//! 
+//!
 use rmp_serde;
 use serde_cbor;
 use serde_yaml;
@@ -143,7 +143,7 @@ impl ExplainValue for Value {
 
 #[path = "common.rs"]
 pub mod common;
-pub use common::{ErrorKind, Error, KeyExplained, DBInfo};
+pub use common::{DBInfo, Error, ErrorKind, KeyExplained};
 
 #[path = "client.rs"]
 pub mod client;
@@ -188,15 +188,6 @@ macro_rules! get_engine {
                     "The database is not opened",
                 ))
             }
-        }
-    };
-}
-
-macro_rules! unwrap_as_is {
-    ( $e:expr ) => {
-        match $e {
-            Ok(x) => x,
-            Err(e) => return Err(e),
         }
     };
 }
@@ -739,7 +730,7 @@ impl Database {
         }
         let mut schema_key = ".schema/".to_owned() + key;
         loop {
-            if unwrap_as_is!(self.key_exists(&schema_key)) {
+            if self.key_exists(&schema_key)? {
                 debug!("Found Schema schema_key for {} at {}", key, schema_key);
                 return Ok(Some(schema_key));
             }
@@ -762,7 +753,7 @@ impl Database {
                 .with_draft(Draft::Draft7)
                 .compile(value));
         } else {
-            match unwrap_as_is!(self.find_schema_key(key)) {
+            match self.find_schema_key(key)? {
                 Some(schema_key) => {
                     let schema = unwrap_io!(self.get_key_data(DataKey::Name(&schema_key), false)).0;
                     let compiled = unwrap_schema_compile!(JSONSchema::options()
@@ -791,7 +782,7 @@ impl Database {
         let engine = get_engine!(self);
         let mut dts: Vec<String> = Vec::new();
         if !ignore_schema {
-            unwrap_as_is!(self.validate_schema(&key, &value));
+            self.validate_schema(&key, &value)?;
         }
         let key_file = self.key_path.clone() + "/" + key.as_str() + engine.get_suffix().as_str();
         if self.write_modified_only {
@@ -1227,7 +1218,7 @@ impl Database {
                             ))
                         }
                     };
-                    unwrap_as_is!(self.set_key_data(&key, v[1].clone(), None, true))
+                    self.set_key_data(&key, v[1].clone(), None, true)?
                 }
                 _ => {
                     return Err(Error::new(
@@ -1352,7 +1343,7 @@ impl Database {
         let value_type = value.get_type();
         return Ok(KeyExplained {
             value,
-            schema: unwrap_as_is!(self.find_schema_key(key)),
+            schema: self.find_schema_key(key)?,
             len: value_len,
             tp: value_type,
             mtime: unwrap_other!(
@@ -1375,8 +1366,8 @@ impl Database {
 
     pub fn key_get_recursive(&mut self, key: &str) -> Result<Vec<(String, Value)>, Error> {
         let mut result = Vec::new();
-        for key in unwrap_as_is!(self.list_key_and_subkeys(key, true)) {
-            let value = unwrap_as_is!(self.get_key_data(DataKey::Name(&key), false)).0;
+        for key in self.list_key_and_subkeys(key, true)? {
+            let value = self.get_key_data(DataKey::Name(&key), false)?.0;
             result.push((key, value));
         }
         Ok(result)
@@ -1394,7 +1385,7 @@ impl Database {
     }
     pub fn key_copy(&mut self, key: &str, dst_key: &str) -> Result<(), Error> {
         debug!("Copying key {} to {}", key, dst_key);
-        let value = unwrap_as_is!(self.get_key_data(DataKey::Name(key), false)).0;
+        let value = self.get_key_data(DataKey::Name(key), false)?.0;
         return self.set_key_data(dst_key, value, None, true);
     }
 
@@ -1614,7 +1605,7 @@ impl Database {
                 unwrap_io!(sync_dir(&dir));
             }
         }
-        for key in unwrap_as_is!(self._purge(false)) {
+        for key in self._purge(false)? {
             result.push((key, false));
         }
         debug!("Repair completed");
@@ -1625,7 +1616,7 @@ impl Database {
     pub fn key_dump(&mut self, key: &str) -> Result<Vec<(String, Value)>, Error> {
         debug!("Dump requested for {}", key);
         let mut result = Vec::new();
-        for key in unwrap_as_is!(self.list_key_and_subkeys(key, true)) {
+        for key in self.list_key_and_subkeys(key, true)? {
             match self.get_key_data(DataKey::Name(&key), false) {
                 Ok(v) => {
                     debug!("Dumped key {}", key);
@@ -1641,7 +1632,7 @@ impl Database {
         debug!("Key load requested");
         for d in data {
             debug!("Loading key {}", d.0);
-            unwrap_as_is!(self.set_key_data(&d.0, d.1, None, true));
+            self.set_key_data(&d.0, d.1, None, true)?;
         }
         Ok(())
     }
