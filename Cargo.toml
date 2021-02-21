@@ -3,6 +3,12 @@ name = "yedb"
 version = "0.0.1"
 authors = ["Sergei S. <div@altertech.com>"]
 edition = "2018"
+license = "Apache-2.0"
+repository = "https://github.com/alttch/yedb-rs"
+description = "Rugged embedded and client/server key-value database"
+readme = "README.md"
+keywords = ["database", "server", "client", "key-value"]
+autoexamples = false
 
 [lib]
 name = "yedb"
