@@ -12,8 +12,8 @@ use std::io::{self, Read};
 use colored::Colorize;
 use std::time::{Duration, Instant, SystemTime};
 
-use yedb::*;
 use chrono::*;
+use yedb::*;
 
 use clap::Clap;
 use getch;
@@ -186,6 +186,7 @@ enum Cmd {
     Check,
     Repair,
     Purge,
+    Version,
 }
 
 #[derive(Clap)]
@@ -686,6 +687,15 @@ fn main() {
     let opts: Opts = Opts::parse();
     let mut db = YedbClient::new(&opts.path);
     let exit_code = match opts.cmd {
+        Cmd::Version => {
+            println!("{} : {}", "yedb-rs".blue().bold(), VERSION.yellow());
+            println!(
+                "{}  : {}",
+                "engine".blue().bold(),
+                ENGINE_VERSION.to_string().yellow()
+            );
+            0
+        }
         Cmd::Test => output_result_ok(db.test()),
         Cmd::Info => match db.info() {
             Ok(db_info) => {

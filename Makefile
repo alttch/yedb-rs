@@ -1,4 +1,4 @@
-VERSION=0.0.1
+VERSION=0.0.2
 
 all: test
 
@@ -21,6 +21,7 @@ tag:
 
 ver:
 	sed -i 's/^version = ".*/version = "${VERSION}"/g' Cargo.toml
+	sed -i 's/^pub const VERSION:.*/pub const VERSION: \&str = "${VERSION}";/g' src/lib.rs
 
 doc:
 	grep -v "^//!" src/lib.rs > src/lib.rs.tmp
