@@ -367,7 +367,7 @@ impl SerializationEngine {
     }
 }
 
-fn de_fmt<'de, D>(deserializer: D) -> serde::export::Result<Option<SerializationEngine>, D::Error>
+fn de_fmt<'de, D>(deserializer: D) -> Result<Option<SerializationEngine>, D::Error>
 where
     D: Deserializer<'de>,
 {

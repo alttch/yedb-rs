@@ -10,13 +10,13 @@ use std::io::prelude::*;
 use std::io::{self, Read};
 
 use colored::Colorize;
-use std::time::Instant;
+use std::time::{Duration, Instant, SystemTime};
 
 use yedb::*;
+use chrono::*;
 
 use clap::Clap;
 use getch;
-use serde::Serialize;
 
 #[macro_use]
 extern crate prettytable;
@@ -155,7 +155,12 @@ fn benchmark(db: &mut YedbClient, nt: usize) {
 
 #[derive(Clap)]
 struct Opts {
-    #[clap(about = "path to socket or tcp://host:port")]
+    #[clap(
+        short = 'C',
+        long = "connect",
+        about = "path to socket or tcp://host:port",
+        default_value = "tcp://127.0.0.1:8870"
+    )]
     path: String,
     #[clap(subcommand)]
     cmd: Cmd,
@@ -661,6 +666,22 @@ fn load_dump(db: &mut YedbClient, file_name: &String, mode: DumpLoadMode) -> Res
     Ok(keys_loaded)
 }
 
+fn format_time(obj: &mut serde_json::map::Map<String, Value>, fields: Vec<&str>) {
+    for f in fields {
+        match obj.get(f) {
+            Some(val) => match val.as_u64() {
+                Some(ts_ns) => {
+                    let d: SystemTime = SystemTime::UNIX_EPOCH + Duration::from_nanos(ts_ns);
+                    let dt: DateTime<Local> = DateTime::from(d);
+                    obj.insert(f.to_owned(), Value::from(dt.to_rfc3339()));
+                }
+                None => {}
+            },
+            None => {}
+        }
+    }
+}
+
 fn main() {
     let opts: Opts = Opts::parse();
     let mut db = YedbClient::new(&opts.path);
@@ -668,8 +689,9 @@ fn main() {
         Cmd::Test => output_result_ok(db.test()),
         Cmd::Info => match db.info() {
             Ok(db_info) => {
-                let r = serde_json::to_value(db_info).unwrap();
-                let o = r.as_object().unwrap();
+                let mut r = serde_json::to_value(db_info).unwrap();
+                let mut o = r.as_object_mut().unwrap();
+                format_time(&mut o, vec!["created"]);
                 display_obj(o);
                 0
             }
@@ -729,8 +751,9 @@ fn main() {
         Cmd::Decr(c) => output_result(db.key_decrement(&c.key)),
         Cmd::Explain(c) => match db.key_explain(&c.key) {
             Ok(key_info) => {
-                let r = serde_json::to_value(key_info).unwrap();
-                let o = r.as_object().unwrap();
+                let mut r = serde_json::to_value(key_info).unwrap();
+                let mut o = r.as_object_mut().unwrap();
+                format_time(&mut o, vec!["mtime", "stime"]);
                 display_obj(o);
                 0
             }
