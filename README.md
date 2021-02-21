@@ -88,7 +88,7 @@ Available at [releases page](https://github.com/alttch/yedb-rs/releases).
 * CPU: Intel Core i7-8550U (4 cores)
 * Drive: Samsung MZVLB512HAJQ-000L7 (NVMe)
 
-- auto\_flush: disabled
+- auto\_flush: false
 
 ```
 set/number: 8164 ops/sec
