@@ -520,11 +520,9 @@ impl DisplayVerbose for Value {
     }
 }
 
-fn display_obj<T: Serialize>(obj: &T) {
-    let r = serde_json::to_value(obj).unwrap();
-    let o = r.as_object().unwrap();
+fn display_obj(obj: &serde_json::map::Map<String, Value>) {
     let mut table = ctable(vec!["name", "value"]);
-    for k in o {
+    for k in obj {
         let value = _format_debug_value(&k.1);
         table.add_row(row![&k.0, value]);
     }
@@ -670,7 +668,9 @@ fn main() {
         Cmd::Test => output_result_ok(db.test()),
         Cmd::Info => match db.info() {
             Ok(db_info) => {
-                display_obj(&db_info);
+                let r = serde_json::to_value(db_info).unwrap();
+                let o = r.as_object().unwrap();
+                display_obj(o);
                 0
             }
             Err(e) => {
@@ -729,7 +729,9 @@ fn main() {
         Cmd::Decr(c) => output_result(db.key_decrement(&c.key)),
         Cmd::Explain(c) => match db.key_explain(&c.key) {
             Ok(key_info) => {
-                display_obj(&key_info);
+                let r = serde_json::to_value(key_info).unwrap();
+                let o = r.as_object().unwrap();
+                display_obj(o);
                 0
             }
             Err(e) => {
