@@ -17,6 +17,7 @@
 
 [![Power loss data survive
 demo](https://img.youtube.com/vi/i3hSWjrNqLo/0.jpg)](https://www.youtube.com/watch?v=i3hSWjrNqLo)
+https://www.youtube.com/watch?v=i3hSWjrNqLo
 
 
 YEDB is absolutely reliable rugged key-value database, which can survive in any
