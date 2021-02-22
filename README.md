@@ -15,6 +15,8 @@
 - I don't like Rust
 - There are other [implementations](https://www.yedb.org).
 
+<iframe width="560" height="315" src="https://www.youtube.com/embed/i3hSWjrNqLo" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+
 YEDB is absolutely reliable rugged key-value database, which can survive in any
 power loss, unless the OS file system die. Keys data is saved in the very
 reliable way and immediately flushed to disk (this can be disabled to speed up
