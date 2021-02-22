@@ -72,7 +72,9 @@ Use client:
 ./yedb-cli -h
 ```
 
-## Embedded example
+## Code examples
+
+### Embedded example
 
 ```rust
 use yedb::Database;
@@ -90,7 +92,10 @@ fn main() {
 }
 ```
 
-## TCP client example
+The connection object can be safely shared between threads using any kind of
+Lock/Mutex preferred, or just cloned.
+
+### TCP client example
 
 ```rust
 use yedb::YedbClient;
@@ -104,6 +109,9 @@ fn main() {
     db.key_delete(&key_name).unwrap();
 }
 ```
+
+The database object can be safely shared between threads using any kind of
+Lock/Mutex preferred.
 
 ## Cargo crate
 
