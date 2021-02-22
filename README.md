@@ -74,8 +74,8 @@ Use client:
 
 ## Code examples
 
-The database/connection objects can be safely shared between threads using any
-kind of Lock/Mutex preferred.
+The database/client objects can be safely shared between threads using any kind
+of Lock/Mutex preferred.
 
 ### Embedded example
 
@@ -95,7 +95,7 @@ fn main() {
 }
 ```
 
-### TCP client example
+### TCP/Unix socket client example
 
 ```rust
 use yedb::YedbClient;
