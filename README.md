@@ -74,6 +74,9 @@ Use client:
 
 ## Code examples
 
+The database/connection objects can be safely shared between threads using any
+kind of Lock/Mutex preferred.
+
 ### Embedded example
 
 ```rust
@@ -92,9 +95,6 @@ fn main() {
 }
 ```
 
-The connection object can be safely shared between threads using any kind of
-Lock/Mutex preferred, or just cloned.
-
 ### TCP client example
 
 ```rust
@@ -109,9 +109,6 @@ fn main() {
     db.key_delete(&key_name).unwrap();
 }
 ```
-
-The database object can be safely shared between threads using any kind of
-Lock/Mutex preferred.
 
 ## Cargo crate
 
