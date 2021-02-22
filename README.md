@@ -29,8 +29,8 @@ the engine but is not recommended - why then YEDB is used for).
 - Storage serialization formats supported: JSON (default), YAML, MessagePack
   and CBOR.
 
-- As binary type is not supported by *serde_json::Value* at this moment, Rust
-  version can not handle binary key values.
+- As byte type is not supported by *serde_json::Value* at this moment, Rust
+  version can not handle byte key values.
 
 - Contains: embedded library, async server and command-line client (TCP/Unix
   socket only).
