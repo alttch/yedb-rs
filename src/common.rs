@@ -63,6 +63,7 @@ pub struct DBInfo {
     pub cache_size: usize,
     pub auto_flush: bool,
     pub path: String,
+    pub lock_path: String,
     pub server: (String, String),
     pub fmt: String,
     pub checksums: bool,

@@ -1239,6 +1239,7 @@ impl Database {
             cached_keys: self.cache.len(),
             cache_size: self.cache.cap(),
             path: self.path.clone(),
+            lock_path: self.lock_path.clone(),
             server: (SERVER_ID.to_owned(), VERSION.to_owned()),
             fmt: engine.se.unwrap().to_string(),
             checksums: engine.checksums,
