@@ -161,6 +161,8 @@ struct Opts {
     bind: String,
     #[clap(long, default_value = "/tmp/yedb-server.pid")]
     pid_file: String,
+    #[clap(long)]
+    lock_path: Option<String>,
     #[clap(long, default_value = "json")]
     default_fmt: SerializationFormat,
     #[clap(short = 'v')]
@@ -236,6 +238,10 @@ fn main() {
     rt.block_on(async move {
         let mut dbobj = DBCELL.write().await;
         dbobj.set_db_path(&opts.path).unwrap();
+        match opts.lock_path {
+            Some(path) => dbobj.set_lock_path(&path).unwrap(),
+            None => {}
+        }
         dbobj.auto_flush = !opts.disable_auto_flush;
         dbobj.auto_repair = !opts.disable_auto_repair;
         dbobj
