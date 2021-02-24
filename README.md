@@ -51,13 +51,13 @@ page](https://github.com/alttch/yedb-rs/releases).
 
 Run server:
 
-```
+```shell
 ./yedb-server /tmp/db1
 ```
 
 Use client:
 
-```
+```shell
 # get server info
 ./yedb-cli info
 # set key value
@@ -128,7 +128,7 @@ fn main() {
 - server workers: 2
 - client threads: 4
 
-```
+```shell
 set/number: 8164 ops/sec
 set/string: 7313 ops/sec
 set/array: 7152 ops/sec
