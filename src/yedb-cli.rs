@@ -172,6 +172,8 @@ struct Opts {
 #[derive(Clap)]
 enum Cmd {
     Get(KeyRCommand),
+    #[clap(about="Gets key value as a batch source")]
+    Source(SourceCommand),
     Incr(KeyCommand),
     Decr(KeyCommand),
     Explain(KeyCommand),
@@ -195,6 +197,13 @@ enum Cmd {
 #[derive(Clap)]
 struct KeyCommand {
     key: String,
+}
+
+#[derive(Clap)]
+struct SourceCommand {
+    key: String,
+    #[clap(long, default_value = "", about="value prefix")]
+    prefix: String
 }
 
 #[derive(Clap)]
@@ -736,6 +745,25 @@ fn main() {
             },
             false => output_result(db.key_get(&c.key)),
         },
+        Cmd::Source(c) => {
+            match db.key_get(&c.key) {
+                Ok(v) => {
+                    match v {
+                        Value::Object(o) => {
+                            for (name, value) in o {
+                                println!("{}{}={}", c.prefix, name.replace("-", "_").replace(".", "_").to_uppercase(), value);
+                            }
+                        }
+                        _ => {}
+                    }
+                    0
+                }
+                Err(e) => {
+                    output_error(e);
+                    1
+                }
+            }
+        }
         Cmd::Ls(c) => {
             let result = match c.all {
                 true => db.key_list_all(&c.key),
