@@ -749,7 +749,7 @@ fn main() {
             Ok(v) => {
                 let pfx = match c.prefix {
                     Some(v) => v + "_",
-                    None => "".to_owned()
+                    None => "".to_owned(),
                 };
                 match v {
                     Value::Object(o) => {
@@ -758,7 +758,23 @@ fn main() {
                                 "{}{}={}",
                                 &pfx,
                                 name.replace("-", "_").replace(".", "_").to_uppercase(),
-                                value
+                                match value {
+                                    Value::Array(a) => {
+                                        let mut result = String::new();
+                                        for val in a {
+                                            let mut vv = val.to_string();
+                                            if vv.starts_with('"') && vv.ends_with('"') {
+                                                vv = vv[1..vv.len()-1].to_owned();
+                                            }
+                                            if !result.is_empty() {
+                                                result += " ";
+                                            }
+                                            result += &vv;
+                                        }
+                                        format!("\"{}\"", result)
+                                    }
+                                    _ => value.to_string(),
+                                }
                             );
                         }
                     }
