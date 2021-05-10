@@ -56,11 +56,17 @@ pub struct KeyExplained {
     pub file: String,
 }
 
+fn default_auto_bak() -> u64 {
+    0
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DBInfo {
     pub repair_recommended: bool,
     pub cached_keys: usize,
     pub cache_size: usize,
+    #[serde(default = "default_auto_bak")]
+    pub auto_bak: u64,
     pub auto_flush: bool,
     pub path: String,
     pub lock_path: String,

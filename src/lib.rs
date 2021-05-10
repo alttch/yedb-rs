@@ -1,62 +1,62 @@
 //! # yedb - rugged embedded and client/server key-value database (Rust implementation)
-//! 
+//!
 //! ## Why YEDB?
-//! 
+//!
 //! - Is it fast?
 //! - Rust version is pretty fast, except writes are still slow if auto-flush is
 //!   enabled.
-//! 
+//!
 //! - Is it smart?
 //! - No
-//! 
+//!
 //! - So what is YEDB for?
 //! - YEDB is ultra-reliable, thread-safe and very easy to use.
-//! 
+//!
 //! - I don't like Rust
 //! - There are other [implementations](https://www.yedb.org).
-//! 
+//!
 //! [![Power loss data survive
 //! demo](https://img.youtube.com/vi/i3hSWjrNqLo/0.jpg)](https://www.youtube.com/watch?v=i3hSWjrNqLo)
-//! 
+//!
 //! https://www.youtube.com/watch?v=i3hSWjrNqLo
-//! 
-//! 
+//!
+//!
 //! YEDB is absolutely reliable rugged key-value database, which can survive in any
 //! power loss, unless the OS file system die. Keys data is saved in the very
 //! reliable way and immediately flushed to disk (this can be disabled to speed up
 //! the engine but is not recommended - why then YEDB is used for).
-//! 
+//!
 //! ## Rust version features
-//! 
+//!
 //! - Rust version is built on top of [Serde](https://serde.rs) framework.
-//! 
+//!
 //! - All key values are *serde_json::Value* objects.
-//! 
+//!
 //! - Storage serialization formats supported: JSON (default), YAML, MessagePack
 //!   and CBOR.
-//! 
+//!
 //! - As byte type is not supported by *serde_json::Value* at this moment, Rust
 //!   version can not handle byte key values.
-//! 
+//!
 //! - Contains: embedded library, async server and command-line client (TCP/Unix
 //!   socket only).
-//! 
+//!
 //! - The command-line client is very basic. If you need more features, use [yedb
 //!   Python CLI](https://github.com/alttch/yedb-py).
-//! 
+//!
 //! ## Client/server
-//! 
+//!
 //! Binaries available at the [releases
 //! page](https://github.com/alttch/yedb-rs/releases).
-//! 
+//!
 //! Run server:
-//! 
+//!
 //! ```shell
 //! ./yedb-server /tmp/db1
 //! ```
-//! 
+//!
 //! Use client:
-//! 
+//!
 //! ```shell
 //! # get server info
 //! ./yedb-cli info
@@ -71,18 +71,18 @@
 //! # get help for all commands
 //! ./yedb-cli -h
 //! ```
-//! 
+//!
 //! ## Code examples
-//! 
+//!
 //! The database/client objects can be safely shared between threads using any kind
 //! of Lock/Mutex preferred.
-//! 
+//!
 //! ### Embedded example
-//! 
+//!
 //! ```rust
 //! use yedb::Database;
 //! use serde_json::Value;
-//! 
+//!
 //! fn main() {
 //!     let mut db = Database::new();
 //!     db.set_db_path("/tmp/db1").unwrap();
@@ -94,13 +94,13 @@
 //!     db.close().unwrap();
 //! }
 //! ```
-//! 
+//!
 //! ### TCP/Unix socket client example
-//! 
+//!
 //! ```rust
 //! use yedb::YedbClient;
 //! use serde_json::Value;
-//! 
+//!
 //! fn main() {
 //!     let mut db = YedbClient::new("tcp://127.0.0.1:8870");
 //!     let key_name = "test/key1";
@@ -109,41 +109,41 @@
 //!     db.key_delete(&key_name).unwrap();
 //! }
 //! ```
-//! 
+//!
 //! ## Cargo crate
-//! 
+//!
 //! [crates.io/crates/yedb](https://crates.io/crates/yedb)
-//! 
+//!
 //! ## Specification
-//! 
+//!
 //! [www.yedb.org](https://www.yedb.org/)
-//! 
+//!
 //! ## Some benchmark data
-//! 
+//!
 //! * CPU: Intel Core i7-8550U (4 cores)
 //! * Drive: Samsung MZVLB512HAJQ-000L7 (NVMe)
-//! 
+//!
 //! - auto\_flush: false
 //! - connection: Unix socket
 //! - server workers: 2
 //! - client threads: 4
-//! 
+//!
 //! ```shell
 //! set/number: 8164 ops/sec
 //! set/string: 7313 ops/sec
 //! set/array: 7152 ops/sec
 //! set/object: 5272 ops/sec
-//! 
+//!
 //! get/number: 49709 ops/sec
 //! get/string: 33338 ops/sec
 //! get/array: 31426 ops/sec
 //! get/object: 11654 ops/sec
-//! 
+//!
 //! get(cached)/number: 122697 ops/sec
 //! get(cached)/string: 61206 ops/sec
 //! get(cached)/array: 59309 ops/sec
 //! get(cached)/object: 34583 ops/sec
-//! 
+//!
 //! increment: 7079 ops/sec
 //! ```
 use rmp_serde;
@@ -566,6 +566,7 @@ pub struct Database {
     pub write_modified_only: bool,
     pub timeout: Duration,
     pub lock_ex: bool,
+    pub auto_bak: u64,
     default_fmt: SerializationEngine,
     default_checksums: bool,
     meta_path: String,
@@ -593,6 +594,7 @@ impl Database {
             default_checksums: true,
             auto_repair: true,
             auto_flush: true,
+            auto_bak: 0,
             lock_ex: true,
             write_modified_only: true,
             timeout: Duration::from_secs(5),
@@ -1301,6 +1303,7 @@ impl Database {
             auto_flush: self.auto_flush,
             cached_keys: self.cache.len(),
             cache_size: self.cache.cap(),
+            auto_bak: self.auto_bak,
             path: self.path.clone(),
             lock_path: self.lock_path.clone(),
             server: (SERVER_ID.to_owned(), VERSION.to_owned()),
@@ -1324,6 +1327,10 @@ impl Database {
         match name {
             "auto_flush" => match value {
                 Value::Bool(v) => self.auto_flush = v,
+                _ => invalid_server_option_value!(name, &value),
+            },
+            "auto_bak" => match value.as_u64() {
+                Some(v) => self.auto_bak = v,
                 _ => invalid_server_option_value!(name, &value),
             },
             "repair_recommended" => match value {
@@ -1367,6 +1374,16 @@ impl Database {
     }
 
     pub fn key_delete(&mut self, key: &str) -> Result<(), Error> {
+        if self.auto_bak > 0 {
+            for n in 1..self.auto_bak + 1 {
+                let key_name = format!("{}.bak{}", key, n);
+                match self._delete_key(&key_name, false, false, false) {
+                    Ok(_) => {}
+                    Err(e) if e.kind() == ErrorKind::KeyNotFound => {}
+                    Err(e) => return Err(e),
+                }
+            }
+        }
         self._delete_key(key, false, false, false)
     }
 
@@ -1438,6 +1455,20 @@ impl Database {
     }
 
     pub fn key_set(&mut self, key: &str, value: Value) -> Result<(), Error> {
+        if self.auto_bak > 0 {
+            for n in (1..self.auto_bak + 1).rev() {
+                let key_from = match n {
+                    1 => key.to_owned(),
+                    _ => format!("{}.bak{}", key, n - 1),
+                };
+                let key_to = format!("{}.bak{}", key, n);
+                match self._rename(&key_from, &key_to, false) {
+                    Ok(_) => {}
+                    Err(e) if e.kind() == ErrorKind::KeyNotFound => {}
+                    Err(e) => return Err(e),
+                }
+            }
+        }
         return self.set_key_data(key, value, None, false);
     }
 
@@ -1496,6 +1527,10 @@ impl Database {
     }
 
     pub fn key_rename(&mut self, key: &str, dst_key: &str) -> Result<(), Error> {
+        self._rename(key, dst_key, true)
+    }
+
+    fn _rename(&mut self, key: &str, dst_key: &str, flush: bool) -> Result<(), Error> {
         debug!("Renaming key {} to {}", key, dst_key);
         let engine = get_engine!(self);
         let mut dts: Vec<String> = Vec::new();
@@ -1513,7 +1548,7 @@ impl Database {
         let dst_key_dir = self.key_path.clone() + "/" + dst_key_path;
 
         let dirs = unwrap_io!(create_dirs(&self.key_path, &dst_key_path));
-        if self.auto_flush {
+        if self.auto_flush && flush {
             for dir in dirs {
                 let d = dir[..dir.rfind("/").unwrap()].to_string();
                 if !dts.contains(&d) {
@@ -1538,7 +1573,7 @@ impl Database {
                     }
                     None => {}
                 };
-                if self.auto_flush {
+                if self.auto_flush && flush {
                     let d1 = key_file[..key_file.rfind("/").unwrap()].to_string();
                     if !dts.contains(&d1) {
                         dts.push(d1);
@@ -1560,7 +1595,7 @@ impl Database {
             Ok(_) => {
                 renamed = true;
                 self.purge_cache_by_path(&dir_name);
-                if self.auto_flush {
+                if self.auto_flush && flush {
                     let d1 = dir_name[..dir_name.rfind("/").unwrap()].to_string();
                     let d2 = dst_dir_name[..dst_dir_name.rfind("/").unwrap()].to_string();
                     if !dts.contains(&d1) {
@@ -1575,7 +1610,7 @@ impl Database {
             Err(e) => return Err(Error::new(ErrorKind::IOError, e)),
         };
 
-        if self.auto_flush {
+        if self.auto_flush && flush {
             for dir in dts {
                 let _ = sync_dir(&dir);
             }

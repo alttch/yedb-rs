@@ -165,7 +165,7 @@ struct Opts {
     lock_path: Option<String>,
     #[clap(long, default_value = "json")]
     default_fmt: SerializationFormat,
-    #[clap(short = 'v')]
+    #[clap(short = 'v', about = "Verbose logging")]
     verbose: bool,
     #[clap(long)]
     disable_auto_flush: bool,
@@ -173,6 +173,8 @@ struct Opts {
     disable_auto_repair: bool,
     #[clap(long, default_value = "1000")]
     cache_size: usize,
+    #[clap(long, default_value = "0")]
+    auto_bak: u64,
     #[clap(long, default_value = "2")]
     workers: usize,
 }
@@ -248,6 +250,8 @@ fn main() {
             .set_default_fmt(&opts.default_fmt.to_string(), true)
             .unwrap();
         dbobj.set_cache_size(opts.cache_size);
+        debug!("Auto bak: {}", opts.auto_bak);
+        dbobj.auto_bak = opts.auto_bak as u64;
         debug!("Workers: {}", opts.workers);
         drop(dbobj);
         run_server(&opts.bind, &opts.pid_file).await;

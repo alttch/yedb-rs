@@ -478,6 +478,12 @@ fn server_set_prop(db: &mut YedbClient, prop: &String, value: String) -> Result<
                 return Err(Error::new(ErrorKind::Other, e));
             }
         },
+        "auto_bak" => match value.parse::<usize>() {
+            Ok(v) => Value::from(v),
+            Err(e) => {
+                return Err(Error::new(ErrorKind::Other, e));
+            }
+        },
         _ => {
             return Err(Error::new(ErrorKind::Other, "Option not supported"));
         }
