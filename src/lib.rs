@@ -954,7 +954,7 @@ impl Database {
         );
         let engine = get_engine!(self);
         let key = fmt_key(key);
-        if key.starts_with(".trash/") || key == "trash" {
+        if key.starts_with(".trash/") || key == ".trash" {
             return Err(Error::new(
                 ErrorKind::KeyNotFound,
                 "Use purge to remove trashed items",
