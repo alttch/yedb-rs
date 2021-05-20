@@ -1607,6 +1607,7 @@ impl Database {
                 }
             }
             Err(ref e) if e.kind() == io::ErrorKind::NotFound => {}
+            Err(ref e) if e.kind() == io::ErrorKind::InvalidInput => {}
             Err(e) => return Err(Error::new(ErrorKind::IOError, e)),
         };
 
