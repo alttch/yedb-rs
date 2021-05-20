@@ -199,11 +199,36 @@ struct KeyCommand {
     key: String,
 }
 
+enum ConvertBools {
+    No,
+    OneZero,
+    One,
+}
+
+impl std::str::FromStr for ConvertBools {
+    type Err = ErrorKind;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "no" => Ok(ConvertBools::No),
+            "onezero" => Ok(ConvertBools::OneZero),
+            "one" => Ok(ConvertBools::One),
+            _ => Err(ErrorKind::InvalidParameter),
+        }
+    }
+}
+
 #[derive(Clap)]
 struct SourceCommand {
     key: String,
     #[clap(long, about = "value prefix")]
     prefix: Option<String>,
+    #[clap(
+        long,
+        about = "convert booleans (no / onezero / one)",
+        default_value = "no"
+    )]
+    convert_bool: ConvertBools,
 }
 
 #[derive(Clap)]
@@ -770,7 +795,7 @@ fn main() {
                                         for val in a {
                                             let mut vv = val.to_string();
                                             if vv.starts_with('"') && vv.ends_with('"') {
-                                                vv = vv[1..vv.len()-1].to_owned();
+                                                vv = vv[1..vv.len() - 1].to_owned();
                                             }
                                             if !result.is_empty() {
                                                 result += " ";
@@ -778,6 +803,19 @@ fn main() {
                                             result += &vv;
                                         }
                                         format!("\"{}\"", result)
+                                    }
+                                    Value::Bool(b) => {
+                                        match c.convert_bool {
+                                            ConvertBools::No => value.to_string(),
+                                            ConvertBools::OneZero => match b {
+                                                true => "1".to_owned(),
+                                                false => "0".to_owned(),
+                                            },
+                                            ConvertBools::One => match b {
+                                                true => "1".to_owned(),
+                                                false => "".to_owned(),
+                                            },
+                                        }
                                     }
                                     _ => value.to_string(),
                                 }
