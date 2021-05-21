@@ -1462,7 +1462,7 @@ impl Database {
                     _ => format!("{}.bak{}", key, n - 1),
                 };
                 let key_to = format!("{}.bak{}", key, n);
-                match self._rename(&key_from, &key_to, false) {
+                match self._rename(&key_from, &key_to, false, true) {
                     Ok(_) => {}
                     Err(e) if e.kind() == ErrorKind::KeyNotFound => {}
                     Err(e) => return Err(e),
@@ -1527,10 +1527,16 @@ impl Database {
     }
 
     pub fn key_rename(&mut self, key: &str, dst_key: &str) -> Result<(), Error> {
-        self._rename(key, dst_key, true)
+        self._rename(key, dst_key, true, false)
     }
 
-    fn _rename(&mut self, key: &str, dst_key: &str, flush: bool) -> Result<(), Error> {
+    fn _rename(
+        &mut self,
+        key: &str,
+        dst_key: &str,
+        flush: bool,
+        dir_only: bool,
+    ) -> Result<(), Error> {
         debug!("Renaming key {} to {}", key, dst_key);
         let engine = get_engine!(self);
         let mut dts: Vec<String> = Vec::new();
@@ -1588,28 +1594,30 @@ impl Database {
         };
 
         // rename dir
-        let dir_name = self.key_path.clone() + "/" + key.as_str();
-        let dst_dir_name = self.key_path.clone() + "/" + dst_key.as_str();
+        if !dir_only {
+            let dir_name = self.key_path.clone() + "/" + key.as_str();
+            let dst_dir_name = self.key_path.clone() + "/" + dst_key.as_str();
 
-        match fs::rename(&dir_name, &dst_dir_name) {
-            Ok(_) => {
-                renamed = true;
-                self.purge_cache_by_path(&dir_name);
-                if self.auto_flush && flush {
-                    let d1 = dir_name[..dir_name.rfind("/").unwrap()].to_string();
-                    let d2 = dst_dir_name[..dst_dir_name.rfind("/").unwrap()].to_string();
-                    if !dts.contains(&d1) {
-                        dts.push(d1);
-                    }
-                    if !dts.contains(&d2) {
-                        dts.push(d2);
+            match fs::rename(&dir_name, &dst_dir_name) {
+                Ok(_) => {
+                    renamed = true;
+                    self.purge_cache_by_path(&dir_name);
+                    if self.auto_flush && flush {
+                        let d1 = dir_name[..dir_name.rfind("/").unwrap()].to_string();
+                        let d2 = dst_dir_name[..dst_dir_name.rfind("/").unwrap()].to_string();
+                        if !dts.contains(&d1) {
+                            dts.push(d1);
+                        }
+                        if !dts.contains(&d2) {
+                            dts.push(d2);
+                        }
                     }
                 }
-            }
-            Err(ref e) if e.kind() == io::ErrorKind::NotFound => {}
-            Err(ref e) if e.kind() == io::ErrorKind::InvalidInput => {}
-            Err(e) => return Err(Error::new(ErrorKind::IOError, e)),
-        };
+                Err(ref e) if e.kind() == io::ErrorKind::NotFound => {}
+                Err(ref e) if e.kind() == io::ErrorKind::InvalidInput => {}
+                Err(e) => return Err(Error::new(ErrorKind::IOError, e)),
+            };
+        }
 
         if self.auto_flush && flush {
             for dir in dts {
