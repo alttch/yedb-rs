@@ -989,16 +989,16 @@ impl Database {
         if !dir_only && key.len() > 0 {
             let key_file =
                 self.key_path.clone() + "/" + key.as_str() + engine.get_suffix().as_str();
-            if self.auto_flush && !no_flush {
-                match fs::File::create(&key_file) {
-                    Ok(mut fh) => {
-                        unwrap_io!(fh.flush());
-                        unwrap_io!(fh.sync_all());
-                    }
-                    Err(ref e) if e.kind() == io::ErrorKind::NotFound => {}
-                    Err(e) => return Err(Error::new(ErrorKind::IOError, e)),
-                }
-            }
+            //if self.auto_flush && !no_flush {
+            //match fs::File::create(&key_file) {
+            //Ok(mut fh) => {
+            //unwrap_io!(fh.flush());
+            //unwrap_io!(fh.sync_all());
+            //}
+            //Err(ref e) if e.kind() == io::ErrorKind::NotFound => {}
+            //Err(e) => return Err(Error::new(ErrorKind::IOError, e)),
+            //}
+            //}
             let trashed = format!(
                 "{}/{}.{}{}",
                 self.trash_path.clone(),
