@@ -1459,7 +1459,7 @@ impl Database {
 
     pub fn key_get_recursive(&mut self, key: &str) -> Result<Vec<(String, Value)>, Error> {
         let mut result = Vec::new();
-        for key in self.list_key_and_subkeys(key, true)? {
+        for key in self.list_key_and_subkeys(key, false)? {
             let value = self.get_key_data(DataKey::Name(&key), false)?.0;
             result.push((key, value));
         }
