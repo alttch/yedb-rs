@@ -154,6 +154,7 @@ use fs2::FileExt;
 use glob::glob;
 use jsonschema::{Draft, JSONSchema};
 use lru::LruCache;
+use regex::Regex;
 use serde::{de::Error as deError, Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -166,6 +167,9 @@ use std::time::{Duration, Instant, SystemTime};
 
 use log::{debug, error, warn};
 
+#[macro_use]
+extern crate lazy_static;
+
 pub const SERVER_ID: &str = "yedb-altt-rs";
 pub const VERSION: &str = "0.0.6";
 pub const ENGINE_VERSION: u8 = 1;
@@ -173,6 +177,10 @@ pub const ENGINE_VERSION: u8 = 1;
 pub const DEFAULT_CACHE_SIZE: usize = 1000;
 
 const SLEEP_STEP: Duration = Duration::from_millis(50);
+
+lazy_static! {
+    static ref RE_BAK: Regex = Regex::new(r"\.bak(\d)?$").unwrap();
+}
 
 trait ExplainValue {
     fn get_len(&self) -> Option<u64>;
@@ -1058,7 +1066,11 @@ impl Database {
                 Ok(v) => {
                     let k = v.to_str().unwrap();
                     let key_name = &k[path_len + 1..k.len() - suffix_len];
-                    if hidden || !key_name.starts_with('.') {
+                    if hidden
+                        || (!key_name.starts_with('.')
+                            && !key_name.contains("/.")
+                            && !RE_BAK.is_match(key_name))
+                    {
                         result.push(key_name.to_owned());
                     }
                 }
