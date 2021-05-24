@@ -1478,18 +1478,26 @@ impl Database {
         Ok(result)
     }
 
+    /// Get key field
+    ///
+    /// field may contain a simple path (e.g. field/subfield/subsubfield)
     pub fn key_get_field(&mut self, key: &str, field: &str) -> Result<Value, Error> {
-        let key_data = self.key_get(key)?;
-        match key_data {
-            Value::Object(o) => match o.get(field) {
-                Some(v) => Ok(v.clone()),
-                None => Err(Error::new(
-                    ErrorKind::FieldNotFound,
-                    format!("no such field: {}", field),
-                )),
-            },
-            _ => Err(Error::new(ErrorKind::DataError, "key is not object")),
+        let mut data: &Value = &self.key_get(key)?;
+        for f in field.split('/') {
+            match data {
+                Value::Object(v) => match v.get(f) {
+                    Some(value) => data = value,
+                    None => {
+                        return Err(Error::new(
+                            ErrorKind::FieldNotFound,
+                            format!("no such field '{}'", field),
+                        ));
+                    }
+                },
+                _ => return Err(Error::new(ErrorKind::DataError, "field is not an object")),
+            }
         }
+        Ok(data.clone())
     }
 
     pub fn key_set_field(&mut self, key: &str, field: &str, value: Value) -> Result<(), Error> {
