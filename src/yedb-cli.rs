@@ -201,6 +201,7 @@ struct KeyCommand {
     key: String,
 }
 
+#[derive(Copy, Clone)]
 enum ConvertBools {
     No,
     OneZero,
@@ -275,6 +276,12 @@ struct KeyRCommand {
 struct GetFieldCommand {
     key: String,
     field: String,
+    #[clap(
+        long,
+        about = "convert booleans (no / onezero / one)",
+        default_value = "no"
+    )]
+    convert_bool: ConvertBools,
 }
 
 #[derive(Clap)]
@@ -743,6 +750,20 @@ fn format_time(obj: &mut serde_json::map::Map<String, Value>, fields: Vec<&str>)
     }
 }
 
+fn convert_bool(value: bool, mode: ConvertBools) -> String {
+    match mode {
+        ConvertBools::No => value.to_string(),
+        ConvertBools::OneZero => match value {
+            true => "1".to_owned(),
+            false => "0".to_owned(),
+        },
+        ConvertBools::One => match value {
+            true => "1".to_owned(),
+            false => "".to_owned(),
+        },
+    }
+}
+
 fn main() {
     let opts: Opts = Opts::parse();
     let mut db = YedbClient::new(&opts.path);
@@ -793,7 +814,22 @@ fn main() {
             },
             false => output_result(db.key_get(&c.key)),
         },
-        Cmd::GetField(c) => output_result(db.key_get_field(&c.key, &c.field)),
+        Cmd::GetField(c) => match db.key_get_field(&c.key, &c.field) {
+            Ok(value) => match value {
+                Value::Bool(b) => {
+                    println!("{}", convert_bool(b, c.convert_bool));
+                    0
+                }
+                _ => {
+                    output_value(value);
+                    0
+                }
+            },
+            Err(e) => {
+                output_error(e);
+                1
+            }
+        },
         Cmd::Source(c) => match db.key_get(&c.key) {
             Ok(v) => {
                 let pfx = match c.prefix {
@@ -822,19 +858,7 @@ fn main() {
                                         }
                                         format!("\"{}\"", result)
                                     }
-                                    Value::Bool(b) => {
-                                        match c.convert_bool {
-                                            ConvertBools::No => value.to_string(),
-                                            ConvertBools::OneZero => match b {
-                                                true => "1".to_owned(),
-                                                false => "0".to_owned(),
-                                            },
-                                            ConvertBools::One => match b {
-                                                true => "1".to_owned(),
-                                                false => "".to_owned(),
-                                            },
-                                        }
-                                    }
+                                    Value::Bool(b) => convert_bool(b, c.convert_bool),
                                     _ => value.to_string(),
                                 }
                             );
