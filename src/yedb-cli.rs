@@ -171,7 +171,7 @@ struct Opts {
 
 #[derive(Clap)]
 enum Cmd {
-    Get(KeyRCommand),
+    Get(GetCommand),
     GetField(GetFieldCommand),
     #[clap(about = "Gets key value as a batch source")]
     Source(SourceCommand),
@@ -270,6 +270,19 @@ struct KeyRCommand {
     key: String,
     #[clap(short, long)]
     recursive: bool,
+}
+
+#[derive(Clap)]
+struct GetCommand {
+    key: String,
+    #[clap(short, long)]
+    recursive: bool,
+    #[clap(
+        long,
+        about = "convert booleans (no / onezero / one)",
+        default_value = "no"
+    )]
+    convert_bool: ConvertBools,
 }
 
 #[derive(Clap)]
@@ -398,6 +411,25 @@ fn output_result<T: std::fmt::Display>(result: Result<T, Error>) -> i32 {
             output_value(v);
             0
         }
+        Err(e) => {
+            output_error(e);
+            1
+        }
+    }
+}
+
+fn output_result_bool(result: Result<Value, Error>, mode: ConvertBools) -> i32 {
+    match result {
+        Ok(value) => match value {
+            Value::Bool(b) => {
+                println!("{}", convert_bool(b, mode));
+                0
+            }
+            _ => {
+                output_value(value);
+                0
+            }
+        },
         Err(e) => {
             output_error(e);
             1
@@ -812,24 +844,15 @@ fn main() {
                     1
                 }
             },
-            false => output_result(db.key_get(&c.key)),
+            false => output_result_bool(
+                match c.key.find(':') {
+                    Some(pos) => db.key_get_field(&c.key[..pos], &c.key[pos + 1..]),
+                    None => db.key_get(&c.key),
+                },
+                c.convert_bool,
+            ),
         },
-        Cmd::GetField(c) => match db.key_get_field(&c.key, &c.field) {
-            Ok(value) => match value {
-                Value::Bool(b) => {
-                    println!("{}", convert_bool(b, c.convert_bool));
-                    0
-                }
-                _ => {
-                    output_value(value);
-                    0
-                }
-            },
-            Err(e) => {
-                output_error(e);
-                1
-            }
-        },
+        Cmd::GetField(c) => output_result_bool(db.key_get_field(&c.key, &c.field), c.convert_bool),
         Cmd::Source(c) => match db.key_get(&c.key) {
             Ok(v) => {
                 let pfx = match c.prefix {
@@ -921,7 +944,10 @@ fn main() {
             }
         },
         Cmd::Set(c) => match format_value(c.value, c.r#type) {
-            Ok(v) => output_result_ok(db.key_set(&c.key, v)),
+            Ok(v) => output_result_ok(match c.key.find(':') {
+                Some(pos) => db.key_set_field(&c.key[..pos], &c.key[pos + 1..], v),
+                None => db.key_set(&c.key, v),
+            }),
             Err(e) => {
                 output_error(e);
                 2
