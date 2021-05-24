@@ -207,6 +207,13 @@ impl YedbClient {
         Ok((self.call(&req))?)
     }
 
+    pub fn key_get_field(&mut self, key: &str, field: &str) -> Result<Value, Error> {
+        let mut req = JSONRpcRequest::new(self.gen_id(), "key_get_field");
+        req.set_param("key", Value::from(key));
+        req.set_param("field", Value::from(field));
+        Ok((self.call(&req))?)
+    }
+
     pub fn key_get_recursive(&mut self, key: &str) -> Result<Vec<(String, Value)>, Error> {
         let mut req = JSONRpcRequest::new(self.gen_id(), "key_get_recursive");
         req.set_param("key", Value::from(key));
@@ -259,6 +266,14 @@ impl YedbClient {
     pub fn key_set(&mut self, key: &str, value: Value) -> Result<(), Error> {
         let mut req = JSONRpcRequest::new(self.gen_id(), "key_set");
         req.set_param("key", Value::from(key));
+        req.set_param("value", value);
+        result_ok!(self, req)
+    }
+
+    pub fn key_set_field(&mut self, key: &str, field: &str, value: Value) -> Result<(), Error> {
+        let mut req = JSONRpcRequest::new(self.gen_id(), "key_set_field");
+        req.set_param("key", Value::from(key));
+        req.set_param("field", Value::from(field));
         req.set_param("value", value);
         result_ok!(self, req)
     }

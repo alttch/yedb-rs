@@ -44,6 +44,18 @@ the engine but is not recommended - why then YEDB is used for).
 - The command-line client is very basic. If you need more features, use [yedb
   Python CLI](https://github.com/alttch/yedb-py).
 
+## Additional features over YEDB specs
+
+- "delete" command does not delete keys, they are moved to .trash folder
+  instead
+
+- .trash folder is being cleaned when "purge" method is invoked.
+
+- "auto\_bak" property tells server to automatically create backup key versions
+  when key data is modified
+
+- "bak" keys are hidden
+
 ## Client/server
 
 Binaries available at the [releases

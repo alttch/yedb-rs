@@ -8,8 +8,8 @@ use tokio::sync::RwLock;
 
 use std::vec::Vec;
 
-use yedb::*;
 use yedb::common::JSONRpcRequest;
+use yedb::*;
 
 use rmp_serde;
 use serde_json;
@@ -434,6 +434,23 @@ async fn process_request(buf: &[u8]) -> Result<Vec<u8>, YedbServerErrorKind> {
             },
             false => encode_jsonrpc_response!(request.error(Error::err_invalid_parameter())),
         },
+        "key_get_field" => match request.params_valid(vec!["key", "field"]) {
+            true => {
+                let key = parse_jsonrpc_request_param!(request, "key", Value::String);
+                let field = parse_jsonrpc_request_param!(request, "field", Value::String);
+                if key.is_some() && field.is_some() {
+                    let k = key.unwrap();
+                    let f = field.unwrap();
+                    debug!("API request: key_get_field {}:{}", k, f);
+                    parse_result_for_jsonrpc!(DBCELL.write().await.key_get_field(k, f), request)
+                } else {
+                    encode_jsonrpc_response!(request.error(Error::err_invalid_parameter()))
+                }
+            }
+            false => {
+                encode_jsonrpc_response!(request.error(Error::err_invalid_parameter()))
+            }
+        },
         "key_get_recursive" => match request.params_valid(vec!["key"]) {
             true => match parse_jsonrpc_request_param!(request, "key", Value::String) {
                 Some(v) => {
@@ -485,6 +502,28 @@ async fn process_request(buf: &[u8]) -> Result<Vec<u8>, YedbServerErrorKind> {
                     let k = key.unwrap();
                     debug!("API request: key_set {}", k);
                     let result = DBCELL.write().await.key_set(k, value.unwrap());
+                    parse_result_for_jsonrpc_ok!(result, request)
+                } else {
+                    encode_jsonrpc_response!(request.error(Error::err_invalid_parameter()))
+                }
+            }
+            false => {
+                encode_jsonrpc_response!(request.error(Error::err_invalid_parameter()))
+            }
+        },
+        "key_set_field" => match request.params_valid(vec!["key", "field", "value"]) {
+            true => {
+                let key = parse_jsonrpc_request_param!(request, "key", Value::String);
+                let field = parse_jsonrpc_request_param!(request, "field", Value::String);
+                let value = match request.params.get("value") {
+                    Some(v) => Some(v.clone()),
+                    None => None,
+                };
+                if key.is_some() && field.is_some() && value.is_some() {
+                    let k = key.unwrap();
+                    let f = field.unwrap();
+                    debug!("API request: key_set_field {}:{}", k, f);
+                    let result = DBCELL.write().await.key_set_field(k, f, value.unwrap());
                     parse_result_for_jsonrpc_ok!(result, request)
                 } else {
                     encode_jsonrpc_response!(request.error(Error::err_invalid_parameter()))

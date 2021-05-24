@@ -172,6 +172,7 @@ struct Opts {
 #[derive(Clap)]
 enum Cmd {
     Get(KeyRCommand),
+    GetField(GetFieldCommand),
     #[clap(about = "Gets key value as a batch source")]
     Source(SourceCommand),
     Incr(KeyCommand),
@@ -179,6 +180,7 @@ enum Cmd {
     Explain(KeyCommand),
     Edit(KeyCommand),
     Set(SetCommand),
+    SetField(SetFieldCommand),
     r#Copy(KeyDstCommand),
     Rename(KeyDstCommand),
     Delete(KeyRCommand),
@@ -270,6 +272,12 @@ struct KeyRCommand {
 }
 
 #[derive(Clap)]
+struct GetFieldCommand {
+    key: String,
+    field: String,
+}
+
+#[derive(Clap)]
 struct SetCommand {
     key: String,
     #[clap(about = "Value to set, '-' for stdin")]
@@ -278,6 +286,15 @@ struct SetCommand {
     r#type: SetType,
 }
 
+#[derive(Clap)]
+struct SetFieldCommand {
+    key: String,
+    field: String,
+    #[clap(about = "Value to set, '-' for stdin")]
+    value: String,
+    #[clap(short = 'p', long, default_value = "string")]
+    r#type: SetType,
+}
 enum SetType {
     Num,
     Str,
@@ -776,6 +793,7 @@ fn main() {
             },
             false => output_result(db.key_get(&c.key)),
         },
+        Cmd::GetField(c) => output_result(db.key_get_field(&c.key, &c.field)),
         Cmd::Source(c) => match db.key_get(&c.key) {
             Ok(v) => {
                 let pfx = match c.prefix {
@@ -880,6 +898,13 @@ fn main() {
         },
         Cmd::Set(c) => match format_value(c.value, c.r#type) {
             Ok(v) => output_result_ok(db.key_set(&c.key, v)),
+            Err(e) => {
+                output_error(e);
+                2
+            }
+        },
+        Cmd::SetField(c) => match format_value(c.value, c.r#type) {
+            Ok(v) => output_result_ok(db.key_set_field(&c.key, &c.field, v)),
             Err(e) => {
                 output_error(e);
                 2

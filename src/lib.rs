@@ -44,6 +44,18 @@
 //! - The command-line client is very basic. If you need more features, use [yedb
 //!   Python CLI](https://github.com/alttch/yedb-py).
 //! 
+//! ## Additional features over YEDB specs
+//! 
+//! - "delete" command does not delete keys, they are moved to .trash folder
+//!   instead
+//! 
+//! - .trash folder is being cleaned when "purge" method is invoked.
+//! 
+//! - "auto\_bak" property tells server to automatically create backup key versions
+//!   when key data is modified
+//! 
+//! - "bak" keys are hidden
+//! 
 //! ## Client/server
 //! 
 //! Binaries available at the [releases
@@ -1464,6 +1476,39 @@ impl Database {
             result.push((key, value));
         }
         Ok(result)
+    }
+
+    pub fn key_get_field(&mut self, key: &str, field: &str) -> Result<Value, Error> {
+        let key_data = self.key_get(key)?;
+        match key_data {
+            Value::Object(o) => match o.get(field) {
+                Some(v) => Ok(v.clone()),
+                None => Err(Error::new(
+                    ErrorKind::FieldNotFound,
+                    format!("no such field: {}", field),
+                )),
+            },
+            _ => Err(Error::new(ErrorKind::DataError, "key is not object")),
+        }
+    }
+
+    pub fn key_set_field(&mut self, key: &str, field: &str, value: Value) -> Result<(), Error> {
+        let key_data = match self.key_get(key) {
+            Ok(v) => v,
+            Err(e) if e.kind() == ErrorKind::KeyNotFound => {
+                let m = serde_json::map::Map::new();
+                Value::from(m)
+            }
+            Err(e) => return Err(e),
+        };
+        match key_data {
+            Value::Object(mut o) => {
+                o.insert(field.to_owned(), value);
+                self.key_set(key, Value::from(o))?;
+                Ok(())
+            }
+            _ => Err(Error::new(ErrorKind::DataError, "key is not object")),
+        }
     }
 
     pub fn key_set(&mut self, key: &str, value: Value) -> Result<(), Error> {

@@ -83,6 +83,7 @@ pub enum ErrorKind {
     DataError,
     TimeoutError,
     KeyNotFound,
+    FieldNotFound,
     SchemaValidationError,
     UnsupportedFormat,
     UnsupportedVersion,
@@ -105,6 +106,7 @@ impl ErrorKind {
             DataError => "Data error",
             TimeoutError => "Timeout error",
             KeyNotFound => "Key not found",
+            FieldNotFound => "Field not found",
             SchemaValidationError => "Schema validation error",
             UnsupportedFormat => "Unsupported format",
             UnsupportedVersion => "Unsupported version",
@@ -135,6 +137,7 @@ where
             -32004 => IOError,
             -32601 => MethodNotFound,
             -32602 => InvalidParameter,
+            -32681 => FieldNotFound,
             _ => Other,
         },
         Err(_) => Other,
@@ -154,6 +157,7 @@ impl Serialize for ErrorKind {
             IOError => -32004,
             MethodNotFound => -32601,
             InvalidParameter => -32602,
+            FieldNotFound => -32681,
             _ => -32000,
         };
         serializer.serialize_i32(code)
