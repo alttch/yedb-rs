@@ -1500,22 +1500,44 @@ impl Database {
         Ok(data.clone())
     }
 
+    /// Set key field
+    ///
+    /// field may contain a simple path (e.g. field/subfield/subsubfield)
     pub fn key_set_field(&mut self, key: &str, field: &str, value: Value) -> Result<(), Error> {
-        let key_data = match self.key_get(key) {
+        let mut key_data: Value = match self.key_get(key) {
             Ok(v) => v,
-            Err(e) if e.kind() == ErrorKind::KeyNotFound => {
-                let m = serde_json::map::Map::new();
-                Value::from(m)
-            }
+            Err(e) if e.kind() == ErrorKind::KeyNotFound => Value::from(serde_json::Map::new()),
             Err(e) => return Err(e),
         };
-        match key_data {
-            Value::Object(mut o) => {
-                o.insert(field.to_owned(), value);
-                self.key_set(key, Value::from(o))?;
+        let mut data_ptr = &mut key_data;
+        let fname = match field.rfind('/') {
+            Some(pos) => {
+                for f in field[..pos].split('/') {
+                    match data_ptr.as_object_mut() {
+                        Some(v) => {
+                            if !v.contains_key(f) {
+                                let m = serde_json::Map::new();
+                                let d = Value::from(m);
+                                v.insert(f.to_owned(), d);
+                            }
+                            data_ptr = v.get_mut(f).unwrap();
+                        }
+                        _ => {
+                            return Err(Error::new(ErrorKind::DataError, "field is not an object"))
+                        }
+                    }
+                }
+                &field[pos+1..]
+            }
+            None => field
+        };
+        match data_ptr.as_object_mut() {
+            Some(o) => {
+                o.insert(fname.to_owned(), value);
+                self.key_set(key, key_data)?;
                 Ok(())
             }
-            _ => Err(Error::new(ErrorKind::DataError, "key is not object")),
+            None => Err(Error::new(ErrorKind::DataError, "field is not object")),
         }
     }
 
