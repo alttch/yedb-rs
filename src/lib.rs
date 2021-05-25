@@ -191,7 +191,7 @@ pub const DEFAULT_CACHE_SIZE: usize = 1000;
 const SLEEP_STEP: Duration = Duration::from_millis(50);
 
 lazy_static! {
-    static ref RE_BAK: Regex = Regex::new(r"\.bak(\d)?$").unwrap();
+    static ref RE_BAK: Regex = Regex::new(r"\.bak(\d)*$").unwrap();
 }
 
 trait ExplainValue {
