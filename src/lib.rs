@@ -1527,14 +1527,18 @@ impl Database {
                         }
                     }
                 }
-                &field[pos+1..]
+                &field[pos + 1..]
             }
-            None => field
+            None => field,
         };
         match data_ptr.as_object_mut() {
             Some(o) => {
-                o.insert(fname.to_owned(), value);
-                self.key_set(key, key_data)?;
+                let oldval = o.get(fname);
+                if oldval.is_none() || oldval.unwrap() != &value || !self.write_modified_only {
+                    o.insert(fname.to_owned(), value);
+                    self.cache.pop(&fmt_key(key));
+                    self.key_set(key, key_data)?;
+                }
                 Ok(())
             }
             None => Err(Error::new(ErrorKind::DataError, "field is not object")),
