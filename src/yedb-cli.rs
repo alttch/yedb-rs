@@ -422,7 +422,11 @@ fn output_result_bool(result: Result<Value, Error>, mode: ConvertBools) -> i32 {
     match result {
         Ok(value) => match value {
             Value::Bool(b) => {
-                println!("{}", convert_bool(b, mode));
+                println!("{}", convert_bool(Some(b), mode));
+                0
+            }
+            Value::Null => {
+                println!("{}", convert_bool(None, mode));
                 0
             }
             _ => {
@@ -782,17 +786,32 @@ fn format_time(obj: &mut serde_json::map::Map<String, Value>, fields: Vec<&str>)
     }
 }
 
-fn convert_bool(value: bool, mode: ConvertBools) -> String {
+fn convert_bool(value: Option<bool>, mode: ConvertBools) -> String {
     match mode {
-        ConvertBools::No => value.to_string(),
-        ConvertBools::OneZero => match value {
-            true => "1".to_owned(),
-            false => "0".to_owned(),
+        ConvertBools::No => match value {
+            Some(v) => v.to_string(),
+            None => "null".to_owned(),
         },
-        ConvertBools::One => match value {
-            true => "1".to_owned(),
-            false => "".to_owned(),
-        },
+        ConvertBools::OneZero => {
+            let val = match value {
+                Some(v) => v,
+                None => false,
+            };
+            match val {
+                true => "1".to_owned(),
+                false => "0".to_owned(),
+            }
+        }
+        ConvertBools::One => {
+            let val = match value {
+                Some(v) => v,
+                None => false,
+            };
+            match val {
+                true => "1".to_owned(),
+                false => "".to_owned(),
+            }
+        }
     }
 }
 
@@ -886,7 +905,8 @@ fn main() {
                                             }
                                             format!("\"{}\"", result)
                                         }
-                                        Value::Bool(b) => convert_bool(b, c.convert_bool),
+                                        Value::Bool(b) => convert_bool(Some(b), c.convert_bool),
+                                        Value::Null => convert_bool(None, c.convert_bool),
                                         _ => value.to_string(),
                                     }
                                 );
