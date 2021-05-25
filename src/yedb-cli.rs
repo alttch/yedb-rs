@@ -853,49 +853,55 @@ fn main() {
             ),
         },
         Cmd::GetField(c) => output_result_bool(db.key_get_field(&c.key, &c.field), c.convert_bool),
-        Cmd::Source(c) => match db.key_get(&c.key) {
-            Ok(v) => {
-                let pfx = match c.prefix {
-                    Some(v) => v + "_",
-                    None => "".to_owned(),
-                };
-                match v {
-                    Value::Object(o) => {
-                        for (name, value) in o {
-                            println!(
-                                "{}{}={}",
-                                &pfx,
-                                name.replace("-", "_").replace(".", "_").to_uppercase(),
-                                match value {
-                                    Value::Array(a) => {
-                                        let mut result = String::new();
-                                        for val in a {
-                                            let mut vv = val.to_string();
-                                            if vv.starts_with('"') && vv.ends_with('"') {
-                                                vv = vv[1..vv.len() - 1].to_owned();
+        Cmd::Source(c) => {
+            let result = match c.key.find(':') {
+                Some(pos) => db.key_get_field(&c.key[..pos], &c.key[pos + 1..]),
+                None => db.key_get(&c.key),
+            };
+            match result {
+                Ok(v) => {
+                    let pfx = match c.prefix {
+                        Some(v) => v + "_",
+                        None => "".to_owned(),
+                    };
+                    match v {
+                        Value::Object(o) => {
+                            for (name, value) in o {
+                                println!(
+                                    "{}{}={}",
+                                    &pfx,
+                                    name.replace("-", "_").replace(".", "_").to_uppercase(),
+                                    match value {
+                                        Value::Array(a) => {
+                                            let mut result = String::new();
+                                            for val in a {
+                                                let mut vv = val.to_string();
+                                                if vv.starts_with('"') && vv.ends_with('"') {
+                                                    vv = vv[1..vv.len() - 1].to_owned();
+                                                }
+                                                if !result.is_empty() {
+                                                    result += " ";
+                                                }
+                                                result += &vv;
                                             }
-                                            if !result.is_empty() {
-                                                result += " ";
-                                            }
-                                            result += &vv;
+                                            format!("\"{}\"", result)
                                         }
-                                        format!("\"{}\"", result)
+                                        Value::Bool(b) => convert_bool(b, c.convert_bool),
+                                        _ => value.to_string(),
                                     }
-                                    Value::Bool(b) => convert_bool(b, c.convert_bool),
-                                    _ => value.to_string(),
-                                }
-                            );
+                                );
+                            }
                         }
+                        _ => {}
                     }
-                    _ => {}
+                    0
                 }
-                0
+                Err(e) => {
+                    output_error(e);
+                    1
+                }
             }
-            Err(e) => {
-                output_error(e);
-                1
-            }
-        },
+        }
         Cmd::Ls(c) => {
             let result = match c.all {
                 true => db.key_list_all(&c.key),
