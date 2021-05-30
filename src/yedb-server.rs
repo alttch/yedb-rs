@@ -533,6 +533,24 @@ async fn process_request(buf: &[u8]) -> Result<Vec<u8>, YedbServerErrorKind> {
                 encode_jsonrpc_response!(request.error(Error::err_invalid_parameter()))
             }
         },
+        "key_delete_field" => match request.params_valid(vec!["key", "field"]) {
+            true => {
+                let key = parse_jsonrpc_request_param!(request, "key", Value::String);
+                let field = parse_jsonrpc_request_param!(request, "field", Value::String);
+                if key.is_some() && field.is_some() {
+                    let k = key.unwrap();
+                    let f = field.unwrap();
+                    debug!("API request: key_delete_field {}:{}", k, f);
+                    let result = DBCELL.write().await.key_delete_field(k, f);
+                    parse_result_for_jsonrpc_ok!(result, request)
+                } else {
+                    encode_jsonrpc_response!(request.error(Error::err_invalid_parameter()))
+                }
+            }
+            false => {
+                encode_jsonrpc_response!(request.error(Error::err_invalid_parameter()))
+            }
+        },
         "key_increment" => match request.params_valid(vec!["key"]) {
             true => match parse_jsonrpc_request_param!(request, "key", Value::String) {
                 Some(v) => {

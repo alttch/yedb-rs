@@ -1545,6 +1545,49 @@ impl Database {
         }
     }
 
+    /// Delete key field
+    ///
+    /// field may contain a simple path (e.g. field/subfield/subsubfield)
+    pub fn key_delete_field(&mut self, key: &str, field: &str) -> Result<(), Error> {
+        let mut key_data: Value = match self.key_get(key) {
+            Ok(v) => v,
+            Err(e) if e.kind() == ErrorKind::KeyNotFound => Value::from(serde_json::Map::new()),
+            Err(e) => return Err(e),
+        };
+        let mut data_ptr = &mut key_data;
+        let fname = match field.rfind('/') {
+            Some(pos) => {
+                for f in field[..pos].split('/') {
+                    match data_ptr.as_object_mut() {
+                        Some(v) => {
+                            if !v.contains_key(f) {
+                                // parent field not found - abort
+                                return Ok(());
+                            }
+                            data_ptr = v.get_mut(f).unwrap();
+                        }
+                        _ => {
+                            return Err(Error::new(ErrorKind::DataError, "field is not an object"))
+                        }
+                    }
+                }
+                &field[pos + 1..]
+            }
+            None => field,
+        };
+        match data_ptr.as_object_mut() {
+            Some(o) => {
+                if o.contains_key(fname) || !self.write_modified_only {
+                    o.remove(fname);
+                    self.cache.pop(&fmt_key(key));
+                    self.key_set(key, key_data)?;
+                }
+                Ok(())
+            }
+            None => Err(Error::new(ErrorKind::DataError, "field is not object")),
+        }
+    }
+
     pub fn key_set(&mut self, key: &str, value: Value) -> Result<(), Error> {
         if self.auto_bak > 0 {
             for n in (1..self.auto_bak + 1).rev() {

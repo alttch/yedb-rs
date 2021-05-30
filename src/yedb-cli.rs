@@ -181,6 +181,7 @@ enum Cmd {
     Edit(KeyCommand),
     Set(SetCommand),
     SetField(SetFieldCommand),
+    DeleteField(DeleteFieldCommand),
     r#Copy(KeyDstCommand),
     Rename(KeyDstCommand),
     Delete(KeyRCommand),
@@ -314,6 +315,12 @@ struct SetFieldCommand {
     value: String,
     #[clap(short = 'p', long, default_value = "string")]
     r#type: SetType,
+}
+
+#[derive(Clap)]
+struct DeleteFieldCommand {
+    key: String,
+    field: String,
 }
 enum SetType {
     Num,
@@ -942,9 +949,12 @@ fn main() {
                 }
             }
         }
-        Cmd::Delete(c) => match c.recursive {
-            true => output_result_ok(db.key_delete_recursive(&c.key)),
-            false => output_result_ok(db.key_delete(&c.key)),
+        Cmd::Delete(c) => match c.key.find(':') {
+            Some(pos) => output_result_ok(db.key_delete_field(&c.key[..pos], &c.key[pos + 1..])),
+            None => match c.recursive {
+                true => output_result_ok(db.key_delete_recursive(&c.key)),
+                false => output_result_ok(db.key_delete(&c.key)),
+            },
         },
         Cmd::Incr(c) => output_result(db.key_increment(&c.key)),
         Cmd::Decr(c) => output_result(db.key_decrement(&c.key)),
@@ -986,6 +996,7 @@ fn main() {
                 2
             }
         },
+        Cmd::DeleteField(c) => output_result_ok(db.key_delete_field(&c.key, &c.field)),
         Cmd::r#Copy(c) => output_result_ok(db.key_copy(&c.key, &c.dst_key)),
         Cmd::Rename(c) => output_result_ok(db.key_rename(&c.key, &c.dst_key)),
         Cmd::Check => match db.check() {

@@ -278,6 +278,13 @@ impl YedbClient {
         result_ok!(self, req)
     }
 
+    pub fn key_delete_field(&mut self, key: &str, field: &str) -> Result<(), Error> {
+        let mut req = JSONRpcRequest::new(self.gen_id(), "key_delete_field");
+        req.set_param("key", Value::from(key));
+        req.set_param("field", Value::from(field));
+        result_ok!(self, req)
+    }
+
     pub fn key_increment(&mut self, key: &str) -> Result<i64, Error> {
         let mut req = JSONRpcRequest::new(self.gen_id(), "key_increment");
         req.set_param("key", Value::from(key));
