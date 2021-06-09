@@ -67,6 +67,7 @@ pub struct DBInfo {
     pub cache_size: usize,
     #[serde(default = "default_auto_bak")]
     pub auto_bak: u64,
+    pub strict_schema: bool,
     pub auto_flush: bool,
     pub path: String,
     pub lock_path: String,

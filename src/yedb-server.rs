@@ -171,6 +171,8 @@ struct Opts {
     disable_auto_flush: bool,
     #[clap(long)]
     disable_auto_repair: bool,
+    #[clap(long)]
+    strict_schema: bool,
     #[clap(long, default_value = "1000")]
     cache_size: usize,
     #[clap(long, default_value = "0")]
@@ -246,6 +248,7 @@ fn main() {
         }
         dbobj.auto_flush = !opts.disable_auto_flush;
         dbobj.auto_repair = !opts.disable_auto_repair;
+        dbobj.strict_schema = opts.strict_schema;
         dbobj
             .set_default_fmt(&opts.default_fmt.to_string(), true)
             .unwrap();

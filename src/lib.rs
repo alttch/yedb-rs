@@ -587,6 +587,7 @@ pub struct Database {
     pub timeout: Duration,
     pub lock_ex: bool,
     pub auto_bak: u64,
+    pub strict_schema: bool,
     default_fmt: SerializationEngine,
     default_checksums: bool,
     meta_path: String,
@@ -615,6 +616,7 @@ impl Database {
             auto_repair: true,
             auto_flush: true,
             auto_bak: 0,
+            strict_schema: false,
             lock_ex: true,
             write_modified_only: true,
             timeout: Duration::from_secs(5),
@@ -846,7 +848,14 @@ impl Database {
                         .compile(&schema));
                     unwrap_schema_validate!(compiled.validate(value));
                 }
-                None => {}
+                None => {
+                    if self.strict_schema {
+                        return Err(Error::new(
+                            ErrorKind::SchemaValidationError,
+                            "schema not defined",
+                        ));
+                    }
+                }
             }
         }
         Ok(())
@@ -1328,6 +1337,7 @@ impl Database {
             cached_keys: self.cache.len(),
             cache_size: self.cache.cap(),
             auto_bak: self.auto_bak,
+            strict_schema: self.strict_schema,
             path: self.path.clone(),
             lock_path: self.lock_path.clone(),
             server: (SERVER_ID.to_owned(), VERSION.to_owned()),
@@ -1355,6 +1365,10 @@ impl Database {
             },
             "auto_bak" => match value.as_u64() {
                 Some(v) => self.auto_bak = v,
+                _ => invalid_server_option_value!(name, &value),
+            },
+            "strict_schema" => match value {
+                Value::Bool(v) => self.strict_schema = v,
                 _ => invalid_server_option_value!(name, &value),
             },
             "repair_recommended" => match value {
@@ -1398,7 +1412,7 @@ impl Database {
     }
 
     pub fn key_delete(&mut self, key: &str) -> Result<(), Error> {
-        if self.auto_bak > 0 {
+        if self.auto_bak > 0 && !key.starts_with(".schema/") && key != ".schema" {
             for n in 1..self.auto_bak + 1 {
                 let key_name = format!("{}.bak{}", key, n);
                 match self._delete_key(&key_name, false, false, false) {
@@ -1590,7 +1604,7 @@ impl Database {
 
     pub fn key_set(&mut self, key: &str, value: Value) -> Result<(), Error> {
         self.validate_schema(&key, &value)?;
-        if self.auto_bak > 0 {
+        if self.auto_bak > 0 && !key.starts_with(".schema/") && key != "schema" {
             for n in (1..self.auto_bak + 1).rev() {
                 let key_from = match n {
                     1 => key.to_owned(),
