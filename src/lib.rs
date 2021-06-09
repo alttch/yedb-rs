@@ -1589,6 +1589,7 @@ impl Database {
     }
 
     pub fn key_set(&mut self, key: &str, value: Value) -> Result<(), Error> {
+        self.validate_schema(&key, &value)?;
         if self.auto_bak > 0 {
             for n in (1..self.auto_bak + 1).rev() {
                 let key_from = match n {
@@ -1603,7 +1604,7 @@ impl Database {
                 }
             }
         }
-        return self.set_key_data(key, value, None, false);
+        return self.set_key_data(key, value, None, true);
     }
 
     pub fn key_list(&mut self, key: &str) -> Result<Vec<String>, Error> {
@@ -1615,7 +1616,7 @@ impl Database {
     pub fn key_copy(&mut self, key: &str, dst_key: &str) -> Result<(), Error> {
         debug!("Copying key {} to {}", key, dst_key);
         let value = self.get_key_data(DataKey::Name(key), false)?.0;
-        return self.set_key_data(dst_key, value, None, true);
+        return self.set_key_data(dst_key, value, None, false);
     }
 
     pub fn key_increment(&mut self, key: &str) -> Result<i64, Error> {
