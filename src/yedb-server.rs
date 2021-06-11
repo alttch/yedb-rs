@@ -216,12 +216,18 @@ impl SerializationFormat {
     }
 }
 
+fn set_verbose_logger(filter: LevelFilter) {
+    log::set_logger(&LOGGER)
+        .map(|()| log::set_max_level(filter))
+        .unwrap();
+}
+
 fn main() {
     let opts: Opts = Opts::parse();
     if opts.verbose {
-        log::set_logger(&LOGGER)
-            .map(|()| log::set_max_level(LevelFilter::Debug))
-            .unwrap();
+        set_verbose_logger(LevelFilter::Debug);
+    } else if std::env::var("YEDB_DISABLE_SYSLOG").unwrap_or("0".to_owned()) == "1" {
+        set_verbose_logger(LevelFilter::Info);
     } else {
         let formatter = Formatter3164 {
             facility: Facility::LOG_USER,
@@ -229,10 +235,16 @@ fn main() {
             process: "yedb-server".into(),
             pid: 0,
         };
-        let logger = syslog::unix(formatter).expect("could not connect to syslog");
-        log::set_boxed_logger(Box::new(BasicLogger::new(logger)))
-            .map(|()| log::set_max_level(LevelFilter::Info))
-            .unwrap();
+        match syslog::unix(formatter) {
+            Ok(logger) => {
+                log::set_boxed_logger(Box::new(BasicLogger::new(logger)))
+                    .map(|()| log::set_max_level(LevelFilter::Info))
+                    .unwrap();
+            }
+            Err(_) => {
+                set_verbose_logger(LevelFilter::Info);
+            }
+        }
     }
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(opts.workers)
