@@ -178,7 +178,7 @@ enum Cmd {
     Incr(KeyCommand),
     Decr(KeyCommand),
     Explain(KeyCommand),
-    Edit(KeyCommand),
+    Edit(KeyEditCommand),
     Set(SetCommand),
     SetField(SetFieldCommand),
     DeleteField(DeleteFieldCommand),
@@ -200,6 +200,13 @@ enum Cmd {
 #[derive(Clap)]
 struct KeyCommand {
     key: String,
+}
+
+#[derive(Clap)]
+struct KeyEditCommand {
+    key: String,
+    #[clap(long = "default", about = "default value (file), '-' for stdin")]
+    default: Option<String>,
 }
 
 #[derive(Copy, Clone)]
@@ -972,8 +979,34 @@ fn main() {
             }
         },
         Cmd::Edit(c) => match db.key_get(&c.key) {
-            Ok(v) => edit_key(&mut db, &c.key, Some(&v)),
-            Err(ref e) if e.kind() == ErrorKind::KeyNotFound => edit_key(&mut db, &c.key, None),
+            Ok(v) => {
+                match c.default {
+                    Some(v) if v == "-" => {
+                        let mut buffer = String::new();
+                        io::stdin().read_to_string(&mut buffer).unwrap();
+                    }
+                    Some(_) => {}
+                    None => {}
+                };
+                edit_key(&mut db, &c.key, Some(&v))
+            }
+            Err(ref e) if e.kind() == ErrorKind::KeyNotFound => {
+                let value: Option<Value> = match c.default {
+                    Some(v) if v == "-" => {
+                        let mut buffer = String::new();
+                        io::stdin().read_to_string(&mut buffer).unwrap();
+                        Some(serde_yaml::from_str(&buffer).unwrap())
+                    }
+                    Some(fname) => {
+                        Some(serde_yaml::from_str(&fs::read_to_string(fname).unwrap()).unwrap())
+                    }
+                    None => None,
+                };
+                match value {
+                    Some(v) => edit_key(&mut db, &c.key, Some(&v)),
+                    None => edit_key(&mut db, &c.key, None),
+                }
+            }
             Err(e) => {
                 output_error(e);
                 1
