@@ -52,5 +52,5 @@ pkg:
 	cd _build && echo "" | gh release create v$(VERSION) -t "v$(VERSION)" \
 			yedb-${VERSION}-arm-musleabihf.tar.gz \
 		 	yedb-${VERSION}-i686-musl.tar.gz \
-		 	yedb-${VERSION}-x86_64-musl.tar.gz
+		 	yedb-${VERSION}-x86_64-musl.tar.gz \
 			yedb-${VERSION}-aarch64-musl.tar.gz
