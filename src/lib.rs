@@ -1004,7 +1004,10 @@ impl Database {
             );
             debug!("renaming dir {} to {}", &dn, &trashed);
             unwrap_io!(fs::create_dir_all(&self.trash_path));
-            unwrap_io!(fs::rename(&dn, &trashed));
+            let mut options = fs_extra::dir::CopyOptions::new();
+            options.copy_inside = true;
+            options.overwrite = true;
+            unwrap_io!(fs_extra::dir::move_dir(&dn, &trashed, &options));
             dts.push(dn);
             self.purge_cache_by_path(&key);
         }
@@ -1037,7 +1040,10 @@ impl Database {
             );
             debug!("renaming file {} to {}", &key_file, &trashed);
             unwrap_io!(fs::create_dir_all(&self.trash_path));
-            let _ = fs::rename(&key_file, &trashed);
+            let mut options = fs_extra::file::CopyOptions::new();
+            options.overwrite = true;
+            let _ =
+                fs_extra::file::move_file(&key_file, &trashed, &options);
             if !dts.contains(&key_dir) {
                 dts.push(key_dir.clone());
             }
@@ -1684,7 +1690,7 @@ impl Database {
         key: &str,
         dst_key: &str,
         flush: bool,
-        dir_only: bool,
+        key_only: bool,
     ) -> Result<(), Error> {
         debug!("Renaming key {} to {}", key, dst_key);
         let engine = get_engine!(self);
@@ -1719,7 +1725,13 @@ impl Database {
             self.key_path.clone() + "/" + dst_key.as_str() + engine.get_suffix().as_str();
 
         // rename file
-        match fs::rename(&key_file, &dst_key_file) {
+        let mut options = fs_extra::file::CopyOptions::new();
+        options.overwrite = true;
+        match fs_extra::file::move_file(
+            &key_file,
+            &dst_key_file,
+            &options
+        ) {
             Ok(_) => {
                 renamed = true;
                 match self.cache.pop(&key) {
@@ -1738,16 +1750,21 @@ impl Database {
                     }
                 }
             }
-            Err(ref e) if e.kind() == io::ErrorKind::NotFound => {}
-            Err(e) => return Err(Error::new(ErrorKind::IOError, e)),
+            Err(e) => match e.kind {
+                fs_extra::error::ErrorKind::NotFound => {}
+                _ => return Err(Error::new(ErrorKind::IOError, e)),
+            },
         };
 
         // rename dir
-        if !dir_only {
+        if !key_only {
             let dir_name = self.key_path.clone() + "/" + key.as_str();
             let dst_dir_name = self.key_path.clone() + "/" + dst_key.as_str();
 
-            match fs::rename(&dir_name, &dst_dir_name) {
+            let mut options = fs_extra::dir::CopyOptions::new();
+            options.copy_inside = true;
+            options.overwrite = true;
+            match fs_extra::dir::move_dir(&dir_name, &dst_dir_name, &options) {
                 Ok(_) => {
                     renamed = true;
                     self.purge_cache_by_path(&dir_name);
@@ -1762,9 +1779,12 @@ impl Database {
                         }
                     }
                 }
-                Err(ref e) if e.kind() == io::ErrorKind::NotFound => {}
-                Err(ref e) if e.kind() == io::ErrorKind::InvalidInput => {}
-                Err(e) => return Err(Error::new(ErrorKind::IOError, e)),
+                Err(e) => match e.kind {
+                    fs_extra::error::ErrorKind::NotFound => {}
+                    fs_extra::error::ErrorKind::Io(e)
+                        if e.kind() == io::ErrorKind::InvalidInput => {}
+                    _ => return Err(Error::new(ErrorKind::IOError, e)),
+                },
             };
         }
 
