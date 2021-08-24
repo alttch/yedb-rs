@@ -1,6 +1,6 @@
 [package]
 name = "yedb"
-version = "0.0.20"
+version = "0.0.21"
 authors = ["Sergei S. <div@altertech.com>"]
 edition = "2018"
 license = "Apache-2.0"
