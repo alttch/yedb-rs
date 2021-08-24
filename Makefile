@@ -1,4 +1,4 @@
-VERSION=0.0.20
+VERSION=0.0.21
 
 all: test
 
@@ -48,9 +48,12 @@ pkg:
 	cd target/x86_64-unknown-linux-musl/release && tar czvf ../../../_build/yedb-${VERSION}-x86_64-musl.tar.gz yedb-server yedb-cli
 	cd target/i686-unknown-linux-musl/release && tar czvf ../../../_build/yedb-${VERSION}-i686-musl.tar.gz yedb-server yedb-cli
 	cd target/arm-unknown-linux-musleabihf/release && tar czvf ../../../_build/yedb-${VERSION}-arm-musleabihf.tar.gz yedb-server yedb-cli
-	cd target/aarch64-unknown-linux-musl/release && tar czvf ../../../_build/yedb-${VERSION}-aarch64-musl.tar.gz yedb-server yedb-cli
+	cd target/aarch64-unknown-linux-musl/release && \
+			aarch64-linux-gnu-strip yedb-server && \
+			aarch64-linux-gnu-strip yedb-cli && \
+			tar czvf ../../../_build/yedb-${VERSION}-aarch64-musl.tar.gz yedb-server yedb-cli
 	cd _build && echo "" | gh release create v$(VERSION) -t "v$(VERSION)" \
 			yedb-${VERSION}-arm-musleabihf.tar.gz \
-		 	yedb-${VERSION}-i686-musl.tar.gz \
-		 	yedb-${VERSION}-x86_64-musl.tar.gz \
+			 yedb-${VERSION}-i686-musl.tar.gz \
+			 yedb-${VERSION}-x86_64-musl.tar.gz \
 			yedb-${VERSION}-aarch64-musl.tar.gz
