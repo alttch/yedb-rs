@@ -6,13 +6,11 @@ use tokio::net::{TcpListener, TcpStream, UnixListener, UnixStream};
 use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::RwLock;
 
+use std::fmt;
 use std::vec::Vec;
 
 use yedb::common::JSONRpcRequest;
 use yedb::*;
-
-use rmp_serde;
-use serde_json;
 
 use serde_json::Value;
 
@@ -42,12 +40,10 @@ pub enum YedbServerErrorKind {
 #[macro_export]
 macro_rules! parse_jsonrpc_request_param {
     ($r:expr, $k:expr, $p:path) => {
-        match $r.params.get($k) {
-            Some(v) => match v {
-                $p(v) => Some(v),
-                _ => None,
-            },
-            None => None,
+        if let Some($p(v)) = $r.params.get($k) {
+            Some(v)
+        } else {
+            None
         }
     };
 }
@@ -115,8 +111,8 @@ impl log::Log for SimpleLogger {
 static LOGGER: SimpleLogger = SimpleLogger;
 
 enum Listener {
-    TCP(TcpListener),
-    UNIX(UnixListener),
+    Tcp(TcpListener),
+    Unix(UnixListener),
 }
 
 pub struct ServerData {
@@ -204,15 +200,19 @@ impl std::str::FromStr for SerializationFormat {
     }
 }
 
-impl SerializationFormat {
-    pub fn to_string(&self) -> String {
+impl fmt::Display for SerializationFormat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use SerializationFormat::*;
-        match self {
-            Json => "json".to_owned(),
-            Msgpack => "msgpack".to_owned(),
-            Cbor => "cbor".to_owned(),
-            Yaml => "yaml".to_owned(),
-        }
+        write!(
+            f,
+            "{}",
+            match self {
+                Json => "json".to_owned(),
+                Msgpack => "msgpack".to_owned(),
+                Cbor => "cbor".to_owned(),
+                Yaml => "yaml".to_owned(),
+            }
+        )
     }
 }
 
@@ -226,7 +226,7 @@ fn main() {
     let opts: Opts = Opts::parse();
     if opts.verbose {
         set_verbose_logger(LevelFilter::Debug);
-    } else if std::env::var("YEDB_DISABLE_SYSLOG").unwrap_or("0".to_owned()) == "1" {
+    } else if std::env::var("YEDB_DISABLE_SYSLOG").unwrap_or_else(|_| "0".to_owned()) == "1" {
         set_verbose_logger(LevelFilter::Info);
     } else {
         let formatter = Formatter3164 {
@@ -254,9 +254,8 @@ fn main() {
     rt.block_on(async move {
         let mut dbobj = DBCELL.write().await;
         dbobj.set_db_path(&opts.path).unwrap();
-        match opts.lock_path {
-            Some(path) => dbobj.set_lock_path(&path).unwrap(),
-            None => {}
+        if let Some(path) = opts.lock_path {
+            dbobj.set_lock_path(&path).unwrap();
         }
         dbobj.auto_flush = !opts.disable_auto_flush;
         dbobj.auto_repair = !opts.disable_auto_repair;
@@ -273,15 +272,15 @@ fn main() {
     });
 }
 
-async fn run_server(bind_to: &String, pidfile: &String) {
+async fn run_server(bind_to: &str, pidfile: &str) {
     let mut dbobj = DBCELL.write().await;
     let _ = fs::remove_file(&bind_to).await;
     let listener = match bind_to.starts_with("tcp://") {
-        true => Listener::TCP(TcpListener::bind(&bind_to[6..]).await.unwrap()),
+        true => Listener::Tcp(TcpListener::bind(&bind_to[6..]).await.unwrap()),
         false => {
             let _ = fs::remove_file(&bind_to).await;
             SDATA.write().await.socket_path = Some(bind_to.to_owned());
-            Listener::UNIX(UnixListener::bind(&bind_to).unwrap())
+            Listener::Unix(UnixListener::bind(&bind_to).unwrap())
         }
     };
     let server_info = dbobj.open().unwrap();
@@ -296,13 +295,13 @@ async fn run_server(bind_to: &String, pidfile: &String) {
         f.write_all(std::process::id().to_string().as_bytes())
             .await
             .unwrap();
-        SDATA.write().await.pid_path = pidfile.clone();
+        SDATA.write().await.pid_path = pidfile.to_owned();
     }
     drop(dbobj);
     info!("Started, listening at {}", bind_to);
     loop {
         match listener {
-            Listener::UNIX(ref socket) => match socket.accept().await {
+            Listener::Unix(ref socket) => match socket.accept().await {
                 Ok((mut stream, _addr)) => {
                     tokio::spawn(async move {
                         unix_worker(&mut stream).await;
@@ -312,7 +311,7 @@ async fn run_server(bind_to: &String, pidfile: &String) {
                     error!("API connect error {}", e);
                 }
             },
-            Listener::TCP(ref socket) => match socket.accept().await {
+            Listener::Tcp(ref socket) => match socket.accept().await {
                 Ok((mut stream, _addr)) => {
                     stream.set_nodelay(true).unwrap();
                     tokio::spawn(async move {
@@ -431,7 +430,7 @@ async fn process_request(buf: &[u8]) -> Result<Vec<u8>, YedbServerErrorKind> {
                     let value = request.params.get("value").unwrap();
                     debug!("API request: server_set {}={}", name, value);
                     parse_result_for_jsonrpc_ok!(
-                        DBCELL.write().await.server_set(&name, value.clone()),
+                        DBCELL.write().await.server_set(name, value.clone()),
                         request
                     )
                 }
@@ -443,7 +442,7 @@ async fn process_request(buf: &[u8]) -> Result<Vec<u8>, YedbServerErrorKind> {
             true => match parse_jsonrpc_request_param!(request, "key", Value::String) {
                 Some(v) => {
                     debug!("API request: key_get {}", v);
-                    parse_result_for_jsonrpc!(DBCELL.write().await.key_get(&v), request)
+                    parse_result_for_jsonrpc!(DBCELL.write().await.key_get(v), request)
                 }
                 None => encode_jsonrpc_response!(request.error(Error::err_invalid_parameter())),
             },
@@ -509,10 +508,7 @@ async fn process_request(buf: &[u8]) -> Result<Vec<u8>, YedbServerErrorKind> {
         "key_set" => match request.params_valid(vec!["key", "value"]) {
             true => {
                 let key = parse_jsonrpc_request_param!(request, "key", Value::String);
-                let value = match request.params.get("value") {
-                    Some(v) => Some(v.clone()),
-                    None => None,
-                };
+                let value = request.params.get("value").cloned();
                 if key.is_some() && value.is_some() {
                     let k = key.unwrap();
                     debug!("API request: key_set {}", k);
@@ -530,10 +526,7 @@ async fn process_request(buf: &[u8]) -> Result<Vec<u8>, YedbServerErrorKind> {
             true => {
                 let key = parse_jsonrpc_request_param!(request, "key", Value::String);
                 let field = parse_jsonrpc_request_param!(request, "field", Value::String);
-                let value = match request.params.get("value") {
-                    Some(v) => Some(v.clone()),
-                    None => None,
-                };
+                let value = request.params.get("value").cloned();
                 if key.is_some() && field.is_some() && value.is_some() {
                     let k = key.unwrap();
                     let f = field.unwrap();
@@ -633,7 +626,7 @@ async fn process_request(buf: &[u8]) -> Result<Vec<u8>, YedbServerErrorKind> {
             true => match parse_jsonrpc_request_param!(request, "key", Value::String) {
                 Some(v) => {
                     debug!("API request: key_delete_recursive {}", v);
-                    let result = DBCELL.write().await.key_delete_recursive(&v);
+                    let result = DBCELL.write().await.key_delete_recursive(v);
                     parse_result_for_jsonrpc_ok!(result, request)
                 }
                 None => encode_jsonrpc_response!(request.error(Error::err_invalid_parameter())),
@@ -694,7 +687,7 @@ async fn process_request(buf: &[u8]) -> Result<Vec<u8>, YedbServerErrorKind> {
             true => match parse_jsonrpc_request_param!(request, "key", Value::String) {
                 Some(v) => {
                     debug!("API request: key_dump {}", v);
-                    parse_result_for_jsonrpc!(DBCELL.write().await.key_dump(&v), request)
+                    parse_result_for_jsonrpc!(DBCELL.write().await.key_dump(v), request)
                 }
                 None => encode_jsonrpc_response!(request.error(Error::err_invalid_parameter())),
             },

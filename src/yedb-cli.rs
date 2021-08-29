@@ -1,8 +1,8 @@
 use serde_json::Value;
-use serde_yaml;
 use sha2::{Digest, Sha256};
 
 use std::env;
+use std::fmt;
 use std::fs;
 use std::process;
 
@@ -16,7 +16,6 @@ use chrono::*;
 use yedb::*;
 
 use clap::Clap;
-use getch;
 
 #[macro_use]
 extern crate prettytable;
@@ -39,15 +38,18 @@ enum BenchmarkOp {
     GetCached,
 }
 
-impl BenchmarkOp {
-    pub fn to_string(&self) -> String {
+impl fmt::Display for BenchmarkOp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use BenchmarkOp::*;
-        match self {
-            Set => "set",
-            Get => "get",
-            GetCached => "get(cached)",
-        }
-        .to_owned()
+        write!(
+            f,
+            "{}",
+            match self {
+                Set => "set",
+                Get => "get",
+                GetCached => "get(cached)",
+            }
+        )
     }
 }
 
@@ -63,17 +65,14 @@ fn benchmark(db: &mut YedbClient, nt: usize) {
         test_string += "x";
     }
     let test_string = Value::from(test_string);
-    let mut test_array: Vec<f64> = Vec::new();
-    for _ in 0..100 {
-        test_array.push(777.777);
-    }
+    let test_array: Vec<f64> = vec![777.777; 100];
     let test_array = Value::from(test_array);
     let mut test_dict = serde_json::Map::new();
     for i in 0..100 {
         test_dict.insert(format!("v{}", i), Value::from(i as f64 * 777.777));
     }
     let test_dict = Value::from(test_dict);
-    for bm_op in vec![BenchmarkOp::Set, BenchmarkOp::Get, BenchmarkOp::GetCached] {
+    for bm_op in [BenchmarkOp::Set, BenchmarkOp::Get, BenchmarkOp::GetCached] {
         for op in vec![
             ("number", test_number.clone()),
             ("string", test_string.clone()),
@@ -122,7 +121,7 @@ fn benchmark(db: &mut YedbClient, nt: usize) {
         if bm_op == BenchmarkOp::Set {
             db.purge_cache().unwrap();
         }
-        println!("");
+        println!();
     }
     let mut handlers = Vec::new();
     let t_start = Instant::now();
@@ -487,17 +486,17 @@ macro_rules! output_editor_error {
     };
 }
 
-fn edit_key(db: &mut YedbClient, key: &String, value: Option<&Value>) -> i32 {
+fn edit_key(db: &mut YedbClient, key: &str, value: Option<&Value>) -> i32 {
     let mut code = 0;
     let mut hasher = Sha256::new();
     hasher.update(&key);
     let digest = hasher.finalize();
     let temp_file_name = format!(
         "{}/yedb-{}.yml",
-        env::var("TEMP").unwrap_or(env::var("TMP").unwrap_or("/tmp".to_owned())),
+        env::var("TEMP").unwrap_or_else(|_| env::var("TMP").unwrap_or_else(|_| "/tmp".to_owned())),
         hex::encode(&digest)
     );
-    let editor = env::var("EDITOR").unwrap_or("vi".to_owned());
+    let editor = env::var("EDITOR").unwrap_or_else(|_| "vi".to_owned());
     let wres = match value {
         Some(v) => fs::write(&temp_file_name, serde_yaml::to_string(&v).unwrap()),
         None => Ok(()),
@@ -510,15 +509,12 @@ fn edit_key(db: &mut YedbClient, key: &String, value: Option<&Value>) -> i32 {
                     match fs::read_to_string(&temp_file_name) {
                         Ok(content) => match serde_yaml::from_str(&content) {
                             Ok(v) => {
-                                match value {
-                                    Some(val) => {
-                                        if &v == val {
-                                            break;
-                                        }
+                                if let Some(val) = value {
+                                    if &v == val {
+                                        break;
                                     }
-                                    None => {}
                                 };
-                                match db.key_set(&key, v) {
+                                match db.key_set(key, v) {
                                     Ok(_) => {
                                         print_ok();
                                         break;
@@ -567,8 +563,8 @@ macro_rules! format_bool {
     };
 }
 
-fn server_set_prop(db: &mut YedbClient, prop: &String, value: String) -> Result<(), Error> {
-    let val = match prop.as_str() {
+fn server_set_prop(db: &mut YedbClient, prop: &str, value: String) -> Result<(), Error> {
+    let val = match prop {
         "auto_flush" => format_bool!(value),
         "repair_recommended" => format_bool!(value),
         "cache_size" => match value.parse::<usize>() {
@@ -587,7 +583,7 @@ fn server_set_prop(db: &mut YedbClient, prop: &String, value: String) -> Result<
             return Err(Error::new(ErrorKind::Other, "Option not supported"));
         }
     };
-    db.server_set(&prop, val)
+    db.server_set(prop, val)
 }
 
 fn ctable(titles: Vec<&str>) -> prettytable::Table {
@@ -646,13 +642,13 @@ impl DisplayVerbose for Value {
 fn display_obj(obj: &serde_json::map::Map<String, Value>) {
     let mut table = ctable(vec!["name", "value"]);
     for k in obj {
-        let value = _format_debug_value(&k.1);
+        let value = _format_debug_value(k.1);
         table.add_row(row![&k.0, value]);
     }
     table.printstd();
 }
 
-fn save_dump(db: &mut YedbClient, key: &str, file_name: &String) -> Result<usize, Error> {
+fn save_dump(db: &mut YedbClient, key: &str, file_name: &str) -> Result<usize, Error> {
     let key_data: Vec<(String, Value)> = db.key_dump(key)?;
     let mut f = unwrap_io!(fs::File::create(file_name));
     let mut keys_dumped = 0;
@@ -706,10 +702,11 @@ enum DumpLoadMode {
     ViewFull,
 }
 
-fn load_dump(db: &mut YedbClient, file_name: &String, mode: DumpLoadMode) -> Result<usize, Error> {
+#[allow(clippy::unnecessary_mut_passed)]
+fn load_dump(db: &mut YedbClient, file_name: &str, mode: DumpLoadMode) -> Result<usize, Error> {
     macro_rules! process_data_buf {
         ($c:expr, $d:expr) => {
-            if $d.len() > 0 {
+            if !$d.is_empty() {
                 $d.reverse();
                 if mode == DumpLoadMode::Load {
                     let mut data: Vec<(String, Value)> = Vec::new();
@@ -754,7 +751,7 @@ fn load_dump(db: &mut YedbClient, file_name: &String, mode: DumpLoadMode) -> Res
     if buf[1] != SerializationEngine::from_string("msgpack")?.as_u8() {
         return Err(Error::new(
             ErrorKind::UnsupportedFormat,
-            format!("Unsupported dump format"),
+            "Unsupported dump format".to_owned(),
         ));
     }
     let mut data_buf: Vec<(String, Value)> = Vec::new();
@@ -786,17 +783,11 @@ fn load_dump(db: &mut YedbClient, file_name: &String, mode: DumpLoadMode) -> Res
 
 fn format_time(obj: &mut serde_json::map::Map<String, Value>, fields: Vec<&str>) {
     for f in fields {
-        match obj.get(f) {
-            Some(val) => match val.as_u64() {
-                Some(ts_ns) => {
-                    let d: SystemTime = SystemTime::UNIX_EPOCH + Duration::from_nanos(ts_ns);
-                    let dt: DateTime<Local> = DateTime::from(d);
-                    obj.insert(f.to_owned(), Value::from(dt.to_rfc3339()));
-                }
-                None => {}
-            },
-            None => {}
-        }
+        if let Some(ts_ns) = obj.get(f).and_then(|val| val.as_u64()) {
+            let d: SystemTime = SystemTime::UNIX_EPOCH + Duration::from_nanos(ts_ns);
+            let dt: DateTime<Local> = DateTime::from(d);
+            obj.insert(f.to_owned(), Value::from(dt.to_rfc3339()));
+        };
     }
 }
 
