@@ -100,7 +100,7 @@ pub enum ErrorKind {
 }
 
 impl ErrorKind {
-    pub fn to_string(&self) -> String {
+    fn convert_to_string(&self) -> String {
         use ErrorKind::*;
         (match self {
             IOError => "I/O Error",
@@ -167,13 +167,13 @@ impl Serialize for ErrorKind {
 
 impl std::fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.to_string())
+        write!(f, "{}", self.convert_to_string())
     }
 }
 
 impl std::fmt::Debug for ErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.to_string())
+        write!(f, "{}", self.convert_to_string())
     }
 }
 
@@ -202,10 +202,6 @@ impl Error {
 
     pub fn kind(&self) -> ErrorKind {
         self.error_kind
-    }
-
-    pub fn to_string(&self) -> String {
-        self.error_kind.to_string() + ": " + self.message.as_str()
     }
 
     pub fn get_message(&self) -> String {
@@ -273,11 +269,11 @@ impl JSONRpcRequest {
     }
 
     pub fn respond_ok(&self) -> JSONRpcResponse<Value> {
-        return self.respond(serde_json::json!({"ok": true }));
+        self.respond(serde_json::json!({"ok": true }))
     }
 
     pub fn is_valid(&self) -> bool {
-        return self.jsonrpc == "2.0";
+        self.jsonrpc == "2.0"
     }
 
     pub fn error(&self, err: Error) -> JSONRpcResponse<Value> {

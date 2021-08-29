@@ -658,7 +658,7 @@ fn save_dump(db: &mut YedbClient, key: &str, file_name: &String) -> Result<usize
     let mut keys_dumped = 0;
     unwrap_io!(f.write_all(&[
         ENGINE_VERSION,
-        SerializationEngine::from_str("msgpack")?.as_u8()
+        SerializationEngine::from_string("msgpack")?.as_u8()
     ]));
     for kd in key_data {
         let buf = match rmp_serde::to_vec_named(&kd) {
@@ -751,7 +751,7 @@ fn load_dump(db: &mut YedbClient, file_name: &String, mode: DumpLoadMode) -> Res
             format!("Unsupported engine version: {}", buf[0]),
         ));
     }
-    if buf[1] != SerializationEngine::from_str("msgpack")?.as_u8() {
+    if buf[1] != SerializationEngine::from_string("msgpack")?.as_u8() {
         return Err(Error::new(
             ErrorKind::UnsupportedFormat,
             format!("Unsupported dump format"),
@@ -802,30 +802,15 @@ fn format_time(obj: &mut serde_json::map::Map<String, Value>, fields: Vec<&str>)
 
 fn convert_bool(value: Option<bool>, mode: ConvertBools) -> String {
     match mode {
-        ConvertBools::No => match value {
-            Some(v) => v.to_string(),
-            None => "null".to_owned(),
-        },
-        ConvertBools::OneZero => {
-            let val = match value {
-                Some(v) => v,
-                None => false,
-            };
-            match val {
-                true => "1".to_owned(),
-                false => "0".to_owned(),
-            }
-        }
-        ConvertBools::One => {
-            let val = match value {
-                Some(v) => v,
-                None => false,
-            };
-            match val {
-                true => "1".to_owned(),
-                false => "".to_owned(),
-            }
-        }
+        ConvertBools::No => value.map_or("null".to_owned(), |v| v.to_string()),
+        ConvertBools::OneZero => value.map_or("0".to_owned(), |v| match v {
+            true => "1".to_owned(),
+            false => "0".to_owned(),
+        }),
+        ConvertBools::One => value.map_or(<_>::default(), |v| match v {
+            true => "1".to_owned(),
+            false => <_>::default(),
+        }),
     }
 }
 
@@ -893,40 +878,34 @@ fn main() {
             };
             match result {
                 Ok(v) => {
-                    let pfx = match c.prefix {
-                        Some(v) => v + "_",
-                        None => "".to_owned(),
-                    };
-                    match v {
-                        Value::Object(o) => {
-                            for (name, value) in o {
-                                println!(
-                                    "{}{}={}",
-                                    &pfx,
-                                    name.replace("-", "_").replace(".", "_").to_uppercase(),
-                                    match value {
-                                        Value::Array(a) => {
-                                            let mut result = String::new();
-                                            for val in a {
-                                                let mut vv = val.to_string();
-                                                if vv.starts_with('"') && vv.ends_with('"') {
-                                                    vv = vv[1..vv.len() - 1].to_owned();
-                                                }
-                                                if !result.is_empty() {
-                                                    result += " ";
-                                                }
-                                                result += &vv;
+                    let pfx = c.prefix.map_or(<_>::default(), |v| v + "_");
+                    if let Value::Object(o) = v {
+                        for (name, value) in o {
+                            println!(
+                                "{}{}={}",
+                                &pfx,
+                                name.replace("-", "_").replace(".", "_").to_uppercase(),
+                                match value {
+                                    Value::Array(a) => {
+                                        let mut result = String::new();
+                                        for val in a {
+                                            let mut vv = val.to_string();
+                                            if vv.starts_with('"') && vv.ends_with('"') {
+                                                vv = vv[1..vv.len() - 1].to_owned();
                                             }
-                                            format!("\"{}\"", result)
+                                            if !result.is_empty() {
+                                                result += " ";
+                                            }
+                                            result += &vv;
                                         }
-                                        Value::Bool(b) => convert_bool(Some(b), c.convert_bool),
-                                        Value::Null => convert_bool(None, c.convert_bool),
-                                        _ => value.to_string(),
+                                        format!("\"{}\"", result)
                                     }
-                                );
-                            }
+                                    Value::Bool(b) => convert_bool(Some(b), c.convert_bool),
+                                    Value::Null => convert_bool(None, c.convert_bool),
+                                    _ => value.to_string(),
+                                }
+                            );
                         }
-                        _ => {}
                     }
                     0
                 }

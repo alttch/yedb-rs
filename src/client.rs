@@ -64,14 +64,14 @@ macro_rules! result_i64 {
 }
 
 enum ClientStream {
-    TCP(TcpStream),
+    Tcp(TcpStream),
     Unix(UnixStream),
 }
 
 impl ClientStream {
     fn set_timeout(&mut self, timeout: Duration) -> Result<(), std::io::Error> {
         match self {
-            ClientStream::TCP(v) => {
+            ClientStream::Tcp(v) => {
                 v.set_read_timeout(Some(timeout))?;
                 v.set_write_timeout(Some(timeout))?;
             }
@@ -84,13 +84,13 @@ impl ClientStream {
     }
     fn read_exact(&mut self, buf: &mut [u8]) -> Result<(), std::io::Error> {
         match self {
-            ClientStream::TCP(v) => v.read_exact(buf),
+            ClientStream::Tcp(v) => v.read_exact(buf),
             ClientStream::Unix(v) => v.read_exact(buf),
         }
     }
     fn write_all(&mut self, buf: &[u8]) -> Result<(), std::io::Error> {
         match self {
-            ClientStream::TCP(v) => v.write_all(buf),
+            ClientStream::Tcp(v) => v.write_all(buf),
             ClientStream::Unix(v) => v.write_all(buf),
         }
     }
@@ -129,7 +129,7 @@ impl YedbClient {
             None => {
                 let mut stream: ClientStream;
                 if self.path.starts_with("tcp://") {
-                    stream = ClientStream::TCP(TcpStream::connect(&self.path[6..])?);
+                    stream = ClientStream::Tcp(TcpStream::connect(&self.path[6..])?);
                 } else {
                     stream = ClientStream::Unix(UnixStream::connect(&self.path)?);
                 }
@@ -181,9 +181,9 @@ impl YedbClient {
             return Err(Error::new(ErrorKind::ProtocolError, "invalid response id"));
         }
         match response.result {
-            Some(value) => Ok(value.clone()),
+            Some(value) => Ok(value),
             None => match response.error {
-                Some(v) => return Err(v),
+                Some(v) => Err(v),
                 None => Ok(Value::Null),
             },
         }
@@ -204,14 +204,14 @@ impl YedbClient {
     pub fn key_get(&mut self, key: &str) -> Result<Value, Error> {
         let mut req = JSONRpcRequest::new(self.gen_id(), "key_get");
         req.set_param("key", Value::from(key));
-        Ok((self.call(&req))?)
+        self.call(&req)
     }
 
     pub fn key_get_field(&mut self, key: &str, field: &str) -> Result<Value, Error> {
         let mut req = JSONRpcRequest::new(self.gen_id(), "key_get_field");
         req.set_param("key", Value::from(key));
         req.set_param("field", Value::from(field));
-        Ok((self.call(&req))?)
+        self.call(&req)
     }
 
     pub fn key_get_recursive(&mut self, key: &str) -> Result<Vec<(String, Value)>, Error> {

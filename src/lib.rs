@@ -158,10 +158,6 @@
 //! 
 //! increment: 7079 ops/sec
 //! ```
-use rmp_serde;
-use serde_cbor;
-use serde_yaml;
-
 use fs2::FileExt;
 use glob::glob;
 use jsonschema::{Draft, JSONSchema};
@@ -170,12 +166,13 @@ use regex::Regex;
 use serde::{de::Error as deError, Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
+use std::fmt;
 use std::fs;
 use std::io;
-use std::io::prelude::*;
+use std::io::Write;
 use std::path::Path;
 use std::process;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, Instant, SystemTime, SystemTimeError};
 
 use log::{debug, error, warn};
 
@@ -275,63 +272,54 @@ macro_rules! get_engine {
     };
 }
 
-macro_rules! unwrap_io {
-    ( $e:expr ) => {
-        match $e {
-            Ok(x) => x,
-            Err(e) => return Err(Error::new(ErrorKind::IOError, e)),
-        }
-    };
-}
-
-macro_rules! unwrap_data {
-    ( $e:expr ) => {
-        match $e {
-            Ok(x) => x,
-            Err(e) => return Err(Error::new(ErrorKind::DataError, e)),
-        }
-    };
-}
-
-macro_rules! unwrap_schema_compile {
-    ( $e:expr ) => {
-        match $e {
-            Ok(x) => x,
-            Err(e) => return Err(Error::new(ErrorKind::SchemaValidationError, e)),
-        }
-    };
-}
-
-macro_rules! unwrap_schema_validate {
-    ( $e:expr ) => {
-        match $e {
-            Ok(x) => x,
-            Err(e) => {
-                let mut err: String = String::new();
-                for error in e {
-                    if err.len() > 0 {
-                        err += "\n";
-                    }
-                    err += format!("{}", error).as_str();
-                }
-                return Err(Error::new(ErrorKind::SchemaValidationError, err));
+macro_rules! impl_err_io {
+    ($e: path) => {
+        impl From<$e> for Error {
+            fn from(e: $e) -> Self {
+                Error::new(ErrorKind::IOError, e)
             }
         }
     };
 }
 
-macro_rules! unwrap_other {
-    ( $e:expr ) => {
-        match $e {
-            Ok(x) => x,
-            Err(e) => return Err(Error::new(ErrorKind::Other, e)),
+macro_rules! impl_err_data {
+    ($e: path) => {
+        impl From<$e> for Error {
+            fn from(e: $e) -> Self {
+                Error::new(ErrorKind::DataError, e)
+            }
         }
     };
 }
 
+impl_err_io!(glob::PatternError);
+impl_err_io!(fs_extra::error::Error);
+impl_err_io!(io::Error);
+
+impl_err_data!(rmp_serde::decode::Error);
+impl_err_data!(rmp_serde::encode::Error);
+impl_err_data!(serde_cbor::Error);
+impl_err_data!(serde_json::Error);
+impl_err_data!(serde_yaml::Error);
+impl_err_data!(hex::FromHexError);
+
+impl From<jsonschema::CompilationError> for Error {
+    fn from(e: jsonschema::CompilationError) -> Self {
+        Error::new(ErrorKind::SchemaValidationError, e)
+    }
+}
+
+impl From<SystemTimeError> for Error {
+    fn from(e: SystemTimeError) -> Self {
+        Error::new(ErrorKind::Other, e)
+    }
+}
+
 macro_rules! timestamp_ns {
     () => {
-        unwrap_other!(SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)).as_nanos() as u64
+        SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)?
+            .as_nanos() as u64
     };
 }
 
@@ -348,7 +336,23 @@ impl Serialize for SerializationEngine {
     where
         S: Serializer,
     {
-        serializer.serialize_str(self.to_string().as_str()).into()
+        serializer.serialize_str(self.to_string().as_str())
+    }
+}
+
+impl fmt::Display for SerializationEngine {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use SerializationEngine::*;
+        write!(
+            f,
+            "{}",
+            match self {
+                Json => "json",
+                Msgpack => "msgpack",
+                Cbor => "cbor",
+                Yaml => "yaml",
+            }
+        )
     }
 }
 
@@ -373,7 +377,7 @@ impl SerializationEngine {
             _ => unimplemented!(),
         }
     }
-    pub fn from_str(fmt: &str) -> Result<Self, Error> {
+    pub fn from_string(fmt: &str) -> Result<Self, Error> {
         use SerializationEngine::*;
         match fmt {
             "json" => Ok(Json),
@@ -381,16 +385,6 @@ impl SerializationEngine {
             "cbor" => Ok(Cbor),
             "yaml" => Ok(Yaml),
             _ => Err(Error::new(ErrorKind::UnsupportedFormat, fmt)),
-        }
-    }
-
-    pub fn to_string(&self) -> String {
-        use SerializationEngine::*;
-        match self {
-            Json => "json".to_owned(),
-            Msgpack => "msgpack".to_owned(),
-            Cbor => "cbor".to_owned(),
-            Yaml => "yaml".to_owned(),
         }
     }
 
@@ -403,9 +397,9 @@ impl SerializationEngine {
             Yaml => ".yml".to_owned(),
         };
         if checksums {
-            sfx = sfx + "c";
+            sfx += "c";
         }
-        return sfx;
+        sfx
     }
 
     pub fn is_binary(&self) -> bool {
@@ -418,34 +412,34 @@ impl SerializationEngine {
 
     pub fn deserialize(&self, buf: &[u8]) -> Result<Value, Error> {
         use SerializationEngine::*;
-        match self {
-            Msgpack => Ok(unwrap_data!(rmp_serde::from_read_ref(buf))),
-            Cbor => Ok(unwrap_data!(serde_cbor::from_slice(buf))),
-            Json => Ok(unwrap_data!(serde_json::from_slice(buf))),
-            Yaml => Ok(unwrap_data!(serde_yaml::from_slice(buf))),
-        }
+        Ok(match self {
+            Msgpack => rmp_serde::from_read_ref(buf)?,
+            Cbor => serde_cbor::from_slice(buf)?,
+            Json => serde_json::from_slice(buf)?,
+            Yaml => serde_yaml::from_slice(buf)?,
+        })
     }
 
     pub fn serialize(&self, value: &Value) -> Result<Vec<u8>, Error> {
         use SerializationEngine::*;
-        match self {
-            Msgpack => Ok(unwrap_data!(rmp_serde::to_vec_named(value))),
-            Cbor => Ok(unwrap_data!(serde_cbor::to_vec(value))),
-            Json => Ok({
-                let mut v = unwrap_data!(serde_json::to_vec(value));
+        Ok(match self {
+            Msgpack => rmp_serde::to_vec_named(value)?,
+            Cbor => serde_cbor::to_vec(value)?,
+            Json => {
+                let mut v = serde_json::to_vec(value)?;
                 if v.is_empty() || v[v.len() - 1] != 0x0A_u8 {
                     v.push(0x0A_u8);
                 }
                 v
-            }),
-            Yaml => Ok({
-                let mut v = unwrap_data!(serde_yaml::to_vec(value));
+            }
+            Yaml => {
+                let mut v = serde_yaml::to_vec(value)?;
                 if v.is_empty() || v[v.len() - 1] != 0x0A_u8 {
                     v.push(0x0A_u8);
                 }
                 v
-            }),
-        }
+            }
+        })
     }
 }
 
@@ -454,7 +448,7 @@ where
     D: Deserializer<'de>,
 {
     match &String::deserialize(deserializer) {
-        Ok(v) => match SerializationEngine::from_str(v) {
+        Ok(v) => match SerializationEngine::from_string(v) {
             Ok(v) => Ok(Some(v)),
             Err(_) => Ok(None),
         },
@@ -489,6 +483,12 @@ pub struct ServerInfo {
     pub version: u8,
 }
 
+impl Default for ServerInfo {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ServerInfo {
     pub fn new() -> Self {
         Self {
@@ -502,7 +502,7 @@ fn sync_dir(dir: &str) -> Result<(), Error> {
     match fs::File::open(dir) {
         Ok(dh) => {
             debug!("Syncing dir {}", dir);
-            unwrap_io!(dh.sync_all());
+            dh.sync_all()?;
         }
         Err(ref e) if e.kind() == io::ErrorKind::NotFound => {
             debug!("Dir {} not found, skipping sync", dir);
@@ -550,7 +550,7 @@ fn fmt_key(key: &str) -> String {
 
 fn create_dirs(basepath: &str, dirname: &str) -> Result<Vec<String>, Error> {
     // own function to return vec of created dirs
-    let parts = dirname.split("/");
+    let parts = dirname.split('/');
     let mut created: Vec<String> = Vec::new();
     let mut cdir = basepath.to_string();
     for p in parts {
@@ -606,9 +606,15 @@ impl Drop for Database {
     }
 }
 
+impl Default for Database {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Database {
     pub fn new() -> Self {
-        return Database {
+        Database {
             path: String::new(),
             key_path: String::new(),
             default_fmt: SerializationEngine::Json,
@@ -627,7 +633,7 @@ impl Database {
             engine: None,
             repair_recommended: false,
             lock_fh: None,
-        };
+        }
     }
 
     pub fn is_open(&self) -> bool {
@@ -640,14 +646,12 @@ impl Database {
             fmt, checksums
         );
         match self.engine {
-            Some(_) => {
-                return Err(Error::new(
-                    ErrorKind::Busy,
-                    "the database is already opened",
-                ))
-            }
+            Some(_) => Err(Error::new(
+                ErrorKind::Busy,
+                "the database is already opened",
+            )),
             None => {
-                self.default_fmt = match SerializationEngine::from_str(fmt) {
+                self.default_fmt = match SerializationEngine::from_string(fmt) {
                     Ok(v) => v,
                     Err(e) => return Err(e),
                 };
@@ -660,7 +664,7 @@ impl Database {
     pub fn set_db_path(&mut self, path: &str) -> Result<(), Error> {
         debug!("Setting the DB path to {}", path);
         match self.engine {
-            Some(_) => return Err(Error::new(ErrorKind::Busy, "the database is opened")),
+            Some(_) => Err(Error::new(ErrorKind::Busy, "the database is opened")),
             None => {
                 self.path = path.to_owned();
                 self.key_path = self.path.clone() + "/keys";
@@ -683,7 +687,7 @@ impl Database {
     pub fn set_lock_path(&mut self, path: &str) -> Result<(), Error> {
         debug!("Setting lock path to {}", path);
         match self.engine {
-            Some(_) => return Err(Error::new(ErrorKind::Busy, "the database is opened")),
+            Some(_) => Err(Error::new(ErrorKind::Busy, "the database is opened")),
             None => {
                 self.lock_path = path.to_owned();
                 Ok(())
@@ -693,7 +697,7 @@ impl Database {
 
     pub fn open(&mut self) -> Result<ServerInfo, Error> {
         debug!("Opening the database, path: {}", self.path);
-        if self.path == "" {
+        if self.path.is_empty() {
             return Err(Error::new(ErrorKind::NotInitialized, "db path not set"));
         }
         if self.engine.is_some() {
@@ -707,7 +711,7 @@ impl Database {
         let db_engine: Option<Engine>;
         match fs::read_to_string(self.meta_path.clone()) {
             Ok(buf) => {
-                let engine: Engine = unwrap_data!(serde_json::from_str(&buf));
+                let engine: Engine = serde_json::from_str(&buf)?;
                 if engine.se.is_none() {
                     return Err(Error::new(
                         ErrorKind::UnsupportedFormat,
@@ -733,12 +737,12 @@ impl Database {
                         version: ENGINE_VERSION,
                         checksums: self.default_checksums,
                     };
-                    unwrap_io!(fs::create_dir_all(&self.path));
-                    let mut fh = unwrap_io!(fs::File::create(&self.meta_path));
-                    unwrap_io!(fh.write(unwrap_data!(serde_json::to_string(&engine)).as_bytes()));
+                    fs::create_dir_all(&self.path)?;
+                    let mut fh = fs::File::create(&self.meta_path)?;
+                    fh.write_all(serde_json::to_string(&engine)?.as_bytes())?;
                     if self.auto_flush {
-                        unwrap_io!(fh.flush());
-                        unwrap_io!(fh.sync_all());
+                        fh.flush()?;
+                        fh.sync_all()?;
                     }
                     db_engine = Some(engine);
                     debug!("Database created successfully");
@@ -751,21 +755,21 @@ impl Database {
         if self.lock_ex {
             let lock_path = Path::new(&self.lock_path);
             if lock_path.exists() {
-                let lock_fh = unwrap_io!(fs::File::open(&self.lock_path));
+                let lock_fh = fs::File::open(&self.lock_path)?;
                 match lock_ex(&lock_fh, self.timeout) {
                     Ok(v) => self.repair_recommended = v,
                     Err(e) => return Err(e),
                 };
             }
-            let mut lock_fh = unwrap_io!(fs::File::create(&self.lock_path));
+            let mut lock_fh = fs::File::create(&self.lock_path)?;
             match lock_ex(&lock_fh, self.timeout) {
                 Ok(_) => {}
                 Err(e) => return Err(e),
             };
-            unwrap_io!(lock_fh.write(process::id().to_string().as_bytes()));
+            lock_fh.write_all(process::id().to_string().as_bytes())?;
             if self.auto_flush {
-                unwrap_io!(lock_fh.flush());
-                unwrap_io!(lock_fh.sync_all());
+                lock_fh.flush()?;
+                lock_fh.sync_all()?;
             }
             self.lock_fh = Some(lock_fh);
         }
@@ -785,7 +789,7 @@ impl Database {
         let _ = fs::create_dir_all(&self.trash_path);
         let _ = fs::create_dir_all(&self.key_path);
         if self.auto_flush {
-            unwrap_io!(sync_dir(&self.path));
+            sync_dir(&self.path)?;
         }
         Ok(ServerInfo::new())
     }
@@ -799,13 +803,9 @@ impl Database {
             ));
         }
         self.engine = None;
-        match &self.lock_fh {
-            Some(fh) => {
-                drop(fh);
-                self.lock_fh = None;
-                unwrap_io!(fs::remove_file(&self.lock_path));
-            }
-            None => {}
+        if self.lock_fh.is_some() {
+            self.lock_fh = None;
+            fs::remove_file(&self.lock_path)?;
         }
         Ok(())
     }
@@ -821,7 +821,7 @@ impl Database {
                 debug!("Found Schema schema_key for {} at {}", key, schema_key);
                 return Ok(Some(schema_key));
             }
-            match schema_key.rfind("/") {
+            match schema_key.rfind('/') {
                 Some(pos) => {
                     schema_key = schema_key[..pos].to_string();
                 }
@@ -830,35 +830,47 @@ impl Database {
                 }
             };
         }
-        return Ok(None);
+        Ok(None)
     }
 
     fn validate_schema(&mut self, key: &str, value: &Value) -> Result<(), Error> {
         debug!("Validating schema for {}", key);
         if key.starts_with(".schema/") || key == ".schema" {
-            unwrap_schema_compile!(JSONSchema::options()
+            JSONSchema::options()
                 .with_draft(Draft::Draft7)
-                .compile(value));
+                .compile(value)?;
+            Ok(())
         } else {
+            // TODO cache compiled schemas
             match self.find_schema_key(key)? {
                 Some(schema_key) => {
-                    let schema = unwrap_io!(self.get_key_data(DataKey::Name(&schema_key), false)).0;
-                    let compiled = unwrap_schema_compile!(JSONSchema::options()
+                    let schema = self.get_key_data(DataKey::Name(&schema_key), false)?.0;
+                    let compiled = JSONSchema::options()
                         .with_draft(Draft::Draft7)
-                        .compile(&schema));
-                    unwrap_schema_validate!(compiled.validate(value));
+                        .compile(&schema)?;
+                    compiled.validate(value).map_err(|e| {
+                        let mut err: String = String::new();
+                        for error in e {
+                            if !err.is_empty() {
+                                err += "\n";
+                            }
+                            err += error.to_string().as_str();
+                        }
+                        Error::new(ErrorKind::SchemaValidationError, err)
+                    })
                 }
                 None => {
                     if self.strict_schema {
-                        return Err(Error::new(
+                        Err(Error::new(
                             ErrorKind::SchemaValidationError,
                             "schema not defined",
-                        ));
+                        ))
+                    } else {
+                        Ok(())
                     }
                 }
             }
         }
-        Ok(())
     }
 
     fn set_key_data(
@@ -870,7 +882,7 @@ impl Database {
     ) -> Result<(), Error> {
         debug!("Setting value for key {}", key);
         let key = fmt_key(key);
-        if key.len() == 0 {
+        if key.is_empty() {
             return Err(Error::new(ErrorKind::KeyNotFound, key));
         }
         let engine = get_engine!(self);
@@ -895,10 +907,10 @@ impl Database {
         let key_dir = match key.rfind('/') {
             Some(pos) => {
                 let key_dir = self.key_path.clone() + "/" + &key[0..pos];
-                let dirs = unwrap_io!(create_dirs(&self.key_path, &key[0..pos]));
+                let dirs = create_dirs(&self.key_path, &key[0..pos])?;
                 if self.auto_flush {
                     for dir in dirs {
-                        let d = dir[..dir.rfind("/").unwrap()].to_string();
+                        let d = dir[..dir.rfind('/').unwrap()].to_string();
                         if !dts.contains(&d) {
                             dts.push(d);
                         }
@@ -909,37 +921,37 @@ impl Database {
             None => self.key_path.clone(),
         };
         let temp_file = self.key_path.clone() + "/" + key.as_str() + ".tmp";
-        let content = unwrap_data!(engine.se.unwrap().serialize(&value));
+        let content = engine.se.unwrap().serialize(&value)?;
         let mut hasher = Sha256::new();
         hasher.update(&content);
         let digest = hasher.finalize();
-        let mut file = unwrap_io!(fs::File::create(&temp_file));
+        let mut file = fs::File::create(&temp_file)?;
         let is_binary = engine.is_serialization_binary();
         if engine.checksums {
             if is_binary {
-                unwrap_io!(file.write(&digest));
+                file.write_all(&digest)?;
             } else {
-                unwrap_io!(file.write(hex::encode(&digest).as_bytes()));
-                unwrap_io!(file.write(&[0x0A_u8]));
+                file.write_all(hex::encode(&digest).as_bytes())?;
+                file.write_all(&[0x0A_u8])?;
             }
             let stime = match stime {
                 Some(v) => v,
                 None => timestamp_ns!(),
             };
             if is_binary {
-                unwrap_io!(file.write(&stime.to_le_bytes()));
+                file.write_all(&stime.to_le_bytes())?;
             } else {
-                unwrap_io!(file.write(hex::encode(&stime.to_le_bytes()).as_bytes()));
-                unwrap_io!(file.write(&[0x0A_u8]));
+                file.write_all(hex::encode(&stime.to_le_bytes()).as_bytes())?;
+                file.write_all(&[0x0A_u8])?;
             }
         }
-        unwrap_io!(file.write(&content));
+        file.write_all(&content)?;
         if self.auto_flush {
-            unwrap_io!(file.flush());
-            unwrap_io!(file.sync_all());
+            file.flush()?;
+            file.sync_all()?;
         }
         drop(file);
-        unwrap_io!(fs::rename(&temp_file, key_file));
+        fs::rename(&temp_file, key_file)?;
         if self.auto_flush && !dts.contains(&key_dir) {
             dts.push(key_dir);
         }
@@ -954,7 +966,7 @@ impl Database {
     }
 
     fn purge_cache_by_path(&mut self, key: &str) {
-        let key = match key.ends_with("/") {
+        let key = match key.ends_with('/') {
             true => key.to_owned(),
             false => key.to_owned() + "/",
         };
@@ -989,7 +1001,7 @@ impl Database {
                 "Use purge to remove trashed items",
             ));
         }
-        if key.len() == 0 && !recursive {
+        if key.is_empty() && !recursive {
             return Ok(());
         }
         self.cache.pop(&key);
@@ -1003,11 +1015,11 @@ impl Database {
                 timestamp_ns!()
             );
             debug!("renaming dir {} to {}", &dn, &trashed);
-            unwrap_io!(fs::create_dir_all(&self.trash_path));
+            fs::create_dir_all(&self.trash_path)?;
             let mut options = fs_extra::dir::CopyOptions::new();
             options.copy_inside = true;
             options.overwrite = true;
-            unwrap_io!(fs_extra::dir::move_dir(&dn, &trashed, &options));
+            fs_extra::dir::move_dir(&dn, &trashed, &options)?;
             dts.push(dn);
             self.purge_cache_by_path(&key);
         }
@@ -1018,14 +1030,14 @@ impl Database {
             }
             None => self.key_path.clone(),
         };
-        if !dir_only && key.len() > 0 {
+        if !dir_only && !key.is_empty() {
             let key_file =
                 self.key_path.clone() + "/" + key.as_str() + engine.get_suffix().as_str();
             //if self.auto_flush && !no_flush {
             //match fs::File::create(&key_file) {
             //Ok(mut fh) => {
-            //unwrap_io!(fh.flush());
-            //unwrap_io!(fh.sync_all());
+            //fh.flush()?;
+            //fh.sync_all()?;
             //}
             //Err(ref e) if e.kind() == io::ErrorKind::NotFound => {}
             //Err(e) => return Err(Error::new(ErrorKind::IOError, e)),
@@ -1039,11 +1051,10 @@ impl Database {
                 engine.get_suffix()
             );
             debug!("renaming file {} to {}", &key_file, &trashed);
-            unwrap_io!(fs::create_dir_all(&self.trash_path));
+            fs::create_dir_all(&self.trash_path)?;
             let mut options = fs_extra::file::CopyOptions::new();
             options.overwrite = true;
-            let _ =
-                fs_extra::file::move_file(&key_file, &trashed, &options);
+            let _ = fs_extra::file::move_file(&key_file, &trashed, &options);
             if !dts.contains(&key_dir) {
                 dts.push(key_dir.clone());
             }
@@ -1051,17 +1062,17 @@ impl Database {
         loop {
             if key_dir == self.key_path {
                 if self.auto_flush && !dts.contains(&key_dir) {
-                    dts.push(key_dir.clone());
+                    dts.push(key_dir);
                 }
                 break;
             }
-            if !fs::remove_dir(&key_dir).is_ok() {
+            if fs::remove_dir(&key_dir).is_err() {
                 if self.auto_flush && !dts.contains(&key_dir) {
-                    dts.push(key_dir.clone());
+                    dts.push(key_dir);
                 }
                 break;
             }
-            key_dir = key_dir[0..key_dir.rfind("/").unwrap()].to_owned();
+            key_dir = key_dir[0..key_dir.rfind('/').unwrap()].to_owned();
         }
         if self.auto_flush && !no_flush {
             for dir in dts {
@@ -1081,30 +1092,25 @@ impl Database {
         let suffix = engine.get_suffix();
         let suffix_len = suffix.len();
         let path_len = self.key_path.len();
-        if key.len() > 0 {
+        if !key.is_empty() {
             pattern += "/";
             pattern += key.as_str();
             pattern += "/";
         }
         pattern += "/**/*";
         pattern += suffix.as_str();
-        for entry in unwrap_io!(glob(pattern.as_str())) {
-            match entry {
-                Ok(v) => {
-                    let k = v.to_str().unwrap();
-                    let key_name = &k[path_len + 1..k.len() - suffix_len];
-                    if hidden
-                        || (!key_name.starts_with('.')
-                            && !key_name.contains("/.")
-                            && !RE_BAK.is_match(key_name))
-                    {
-                        result.push(key_name.to_owned());
-                    }
-                }
-                Err(_) => {}
+        for entry in (glob(pattern.as_str())?).flatten() {
+            let k = entry.to_str().unwrap();
+            let key_name = &k[path_len + 1..k.len() - suffix_len];
+            if hidden
+                || (!key_name.starts_with('.')
+                    && !key_name.contains("/.")
+                    && !RE_BAK.is_match(key_name))
+            {
+                result.push(key_name.to_owned());
             }
         }
-        return Ok(result);
+        Ok(result)
     }
 
     fn get_key_data(
@@ -1116,15 +1122,12 @@ impl Database {
         let engine = get_engine!(self);
         if key.is_name() {
             let key = fmt_key(key.get());
-            if key.len() == 0 {
+            if key.is_empty() {
                 return Err(Error::new(ErrorKind::KeyNotFound, key));
             } else if !extended_info {
-                match self.cache.get(&key) {
-                    Some(v) => {
-                        debug!("Using cached value for {}", key);
-                        return Ok((v.clone(), None));
-                    }
-                    None => {}
+                if let Some(v) = self.cache.get(&key) {
+                    debug!("Using cached value for {}", key);
+                    return Ok((v.clone(), None));
                 }
             }
         }
@@ -1142,7 +1145,7 @@ impl Database {
         };
         let checksum: Option<[u8; 32]>;
         let stime: Option<u64>;
-        let value: Value = unwrap_data!(engine.se.unwrap().deserialize(match engine.checksums {
+        let value: Value = engine.se.unwrap().deserialize(match engine.checksums {
             true => {
                 if (is_binary && buf.len() < 41) || (!is_binary && buf.len() < 83) {
                     return Err(Error::new(
@@ -1158,7 +1161,7 @@ impl Database {
                 }
                 let digest = hasher.finalize();
                 if (is_binary && *digest != buf[0..32])
-                    || (!is_binary && *digest != *unwrap_data!(hex::decode(&buf[0..64])).as_slice())
+                    || (!is_binary && *digest != *hex::decode(&buf[0..64])?.as_slice())
                 {
                     return Err(Error::new(
                         ErrorKind::DataError,
@@ -1172,7 +1175,7 @@ impl Database {
                     ]));
                     &buf[40..buf.len()]
                 } else {
-                    let s = unwrap_data!(hex::decode(&buf[65..81]));
+                    let s = hex::decode(&buf[65..81])?;
                     stime = Some(u64::from_le_bytes([
                         s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7],
                     ]));
@@ -1184,13 +1187,13 @@ impl Database {
                 stime = None;
                 &buf
             }
-        }));
+        })?;
         self.cache.put(key.get().to_owned(), value.clone());
         Ok((
             value,
             match extended_info {
                 true => {
-                    let metadata = unwrap_io!(fs::metadata(&key_file));
+                    let metadata = fs::metadata(&key_file)?;
                     Some(KeyInfo {
                         key_file,
                         checksum,
@@ -1210,7 +1213,7 @@ impl Database {
         };
         match self.key_exists(key) {
             Ok(v) => {
-                if v == true {
+                if v {
                     result.push(key.to_owned())
                 }
             }
@@ -1228,10 +1231,10 @@ impl Database {
         let suffix = engine.get_suffix();
         let suffix_len = suffix.len();
         debug!("Cleaning up trash");
-        unwrap_io!(fs::remove_dir_all(&self.trash_path));
+        fs::remove_dir_all(&self.trash_path)?;
         debug!("Cleaning up files and broken keys");
         // clean up files and broken keys
-        for entry in unwrap_io!(glob(&(self.key_path.clone() + "/**/*"))) {
+        for entry in glob(&(self.key_path.clone() + "/**/*"))? {
             match entry {
                 Ok(p) => {
                     let k = p.to_str().unwrap();
@@ -1253,7 +1256,7 @@ impl Database {
                         }
                     }
                     if need_remove {
-                        unwrap_io!(fs::remove_file(k));
+                        fs::remove_file(k)?;
                         if self.auto_flush {
                             let parent = p.parent().unwrap().to_str().unwrap().to_owned();
                             if !dts.contains(&parent) {
@@ -1270,7 +1273,7 @@ impl Database {
         debug!("Cleaning up directories");
         // clean up directories
         let mut dirs: Vec<String> = Vec::new();
-        for entry in unwrap_io!(glob(&(self.key_path.clone() + "/**"))) {
+        for entry in glob(&(self.key_path.clone() + "/**"))? {
             match entry {
                 Ok(p) => {
                     if p.is_dir() {
@@ -1285,16 +1288,11 @@ impl Database {
         dirs.sort();
         dirs.reverse();
         for d in dirs {
-            match fs::remove_dir(&d) {
-                Ok(_) => {
-                    let parent = d[..d.rfind("/").unwrap()].to_string();
-                    if self.auto_flush {
-                        if !dts.contains(&parent) {
-                            dts.push(parent);
-                        }
-                    }
+            if fs::remove_dir(&d).is_ok() {
+                let parent = d[..d.rfind('/').unwrap()].to_string();
+                if self.auto_flush && !dts.contains(&parent) {
+                    dts.push(parent);
                 }
-                Err(_) => {}
             }
         }
         if self.auto_flush {
@@ -1302,14 +1300,14 @@ impl Database {
                 let _ = sync_dir(&dir);
             }
         }
-        unwrap_io!(fs::create_dir_all(&self.trash_path));
+        fs::create_dir_all(&self.trash_path)?;
         self.cache.clear();
-        unwrap_io!(sync_dir(&self.key_path));
+        sync_dir(&self.key_path)?;
         debug!("Purge completed");
         Ok(result)
     }
 
-    pub fn key_load_from_serialized(&mut self, data: &Vec<Value>) -> Result<(), Error> {
+    pub fn key_load_from_serialized(&mut self, data: &[Value]) -> Result<(), Error> {
         for d in data {
             match d {
                 Value::Array(v) => {
@@ -1402,7 +1400,7 @@ impl Database {
     }
 
     pub fn purge(&mut self) -> Result<Vec<String>, Error> {
-        return self._purge(false);
+        self._purge(false)
     }
 
     pub fn safe_purge(&mut self) -> Result<(), Error> {
@@ -1440,13 +1438,10 @@ impl Database {
 
     fn key_exists(&mut self, key: &str) -> Result<bool, Error> {
         let key = fmt_key(key);
-        if key.len() == 0 {
+        if key.is_empty() {
             return Ok(false);
         }
         let engine = get_engine!(self);
-        if key.len() == 0 {
-            return Ok(false);
-        }
         match self.cache.contains(&key) {
             true => Ok(true),
             false => {
@@ -1466,20 +1461,21 @@ impl Database {
         let info = v.1.unwrap();
         let value_len = value.get_len();
         let value_type = value.get_type();
-        return Ok(KeyExplained {
+        Ok(KeyExplained {
             value,
             schema: self.find_schema_key(key)?,
             len: value_len,
             tp: value_type,
-            mtime: unwrap_other!(
-                unwrap_other!(info.metadata.modified()).duration_since(SystemTime::UNIX_EPOCH)
-            )
-            .as_nanos() as u64,
+            mtime: info
+                .metadata
+                .modified()?
+                .duration_since(SystemTime::UNIX_EPOCH)?
+                .as_nanos() as u64,
             sha256: info.checksum,
             stime: info.stime,
             size: info.metadata.len(),
             file: info.key_file,
-        });
+        })
     }
 
     pub fn key_get(&mut self, key: &str) -> Result<Value, Error> {
@@ -1609,7 +1605,7 @@ impl Database {
     }
 
     pub fn key_set(&mut self, key: &str, value: Value) -> Result<(), Error> {
-        self.validate_schema(&key, &value)?;
+        self.validate_schema(key, &value)?;
         if self.auto_bak > 0 && !key.starts_with(".schema/") && key != "schema" {
             for n in (1..self.auto_bak + 1).rev() {
                 let key_from = match n {
@@ -1624,24 +1620,24 @@ impl Database {
                 }
             }
         }
-        return self.set_key_data(key, value, None, true);
+        self.set_key_data(key, value, None, true)
     }
 
     pub fn key_list(&mut self, key: &str) -> Result<Vec<String>, Error> {
-        return self.list_key_and_subkeys(key, false);
+        self.list_key_and_subkeys(key, false)
     }
     pub fn key_list_all(&mut self, key: &str) -> Result<Vec<String>, Error> {
-        return self.list_key_and_subkeys(key, true);
+        self.list_key_and_subkeys(key, true)
     }
     pub fn key_copy(&mut self, key: &str, dst_key: &str) -> Result<(), Error> {
         debug!("Copying key {} to {}", key, dst_key);
         let value = self.get_key_data(DataKey::Name(key), false)?.0;
-        return self.set_key_data(dst_key, value, None, false);
+        self.set_key_data(dst_key, value, None, false)
     }
 
     pub fn key_increment(&mut self, key: &str) -> Result<i64, Error> {
         debug!("Incrementing key {}", key);
-        let key = fmt_key(&key);
+        let key = fmt_key(key);
         let mut value = match self.get_key_data(DataKey::Name(&key), false) {
             Ok(v) => match v.0.as_i64() {
                 Some(n) => n,
@@ -1662,7 +1658,7 @@ impl Database {
 
     pub fn key_decrement(&mut self, key: &str) -> Result<i64, Error> {
         debug!("Decrementing key {}", key);
-        let key = fmt_key(&key);
+        let key = fmt_key(key);
         let mut value = match self.get_key_data(DataKey::Name(&key), false) {
             Ok(v) => match v.0.as_i64() {
                 Some(n) => n,
@@ -1695,23 +1691,23 @@ impl Database {
         debug!("Renaming key {} to {}", key, dst_key);
         let engine = get_engine!(self);
         let mut dts: Vec<String> = Vec::new();
-        let key = fmt_key(&key);
-        let dst_key = fmt_key(&dst_key);
-        if key.len() == 0 || dst_key.len() == 0 {
+        let key = fmt_key(key);
+        let dst_key = fmt_key(dst_key);
+        if key.is_empty() || dst_key.is_empty() {
             return Err(Error::new(ErrorKind::KeyNotFound, key));
         }
 
         let pos = dst_key.rfind('/');
         let dst_key_path = match pos {
             Some(p) => &dst_key[..p],
-            None => &"",
+            None => "",
         };
         let dst_key_dir = self.key_path.clone() + "/" + dst_key_path;
 
-        let dirs = unwrap_io!(create_dirs(&self.key_path, &dst_key_path));
+        let dirs = create_dirs(&self.key_path, dst_key_path)?;
         if self.auto_flush && flush {
             for dir in dirs {
-                let d = dir[..dir.rfind("/").unwrap()].to_string();
+                let d = dir[..dir.rfind('/').unwrap()].to_string();
                 if !dts.contains(&d) {
                     dts.push(d);
                 }
@@ -1727,21 +1723,14 @@ impl Database {
         // rename file
         let mut options = fs_extra::file::CopyOptions::new();
         options.overwrite = true;
-        match fs_extra::file::move_file(
-            &key_file,
-            &dst_key_file,
-            &options
-        ) {
+        match fs_extra::file::move_file(&key_file, &dst_key_file, &options) {
             Ok(_) => {
                 renamed = true;
-                match self.cache.pop(&key) {
-                    Some(v) => {
-                        self.cache.put(dst_key.clone(), v);
-                    }
-                    None => {}
-                };
+                if let Some(v) = self.cache.pop(&key) {
+                    self.cache.put(dst_key.clone(), v);
+                }
                 if self.auto_flush && flush {
-                    let d1 = key_file[..key_file.rfind("/").unwrap()].to_string();
+                    let d1 = key_file[..key_file.rfind('/').unwrap()].to_string();
                     if !dts.contains(&d1) {
                         dts.push(d1);
                     }
@@ -1769,8 +1758,8 @@ impl Database {
                     renamed = true;
                     self.purge_cache_by_path(&dir_name);
                     if self.auto_flush && flush {
-                        let d1 = dir_name[..dir_name.rfind("/").unwrap()].to_string();
-                        let d2 = dst_dir_name[..dst_dir_name.rfind("/").unwrap()].to_string();
+                        let d1 = dir_name[..dir_name.rfind('/').unwrap()].to_string();
+                        let d2 = dst_dir_name[..dst_dir_name.rfind('/').unwrap()].to_string();
                         if !dts.contains(&d1) {
                             dts.push(d1);
                         }
@@ -1794,13 +1783,13 @@ impl Database {
             }
         }
 
-        return match renamed {
+        match renamed {
             true => {
-                unwrap_io!(self._delete_key(&key, false, false, true));
+                self._delete_key(&key, false, false, true)?;
                 Ok(())
             }
             false => Err(Error::new(ErrorKind::KeyNotFound, key)),
-        };
+        }
     }
 
     pub fn check(&mut self) -> Result<Vec<String>, Error> {
@@ -1809,19 +1798,19 @@ impl Database {
         let mut broken: Vec<String> = Vec::new();
         let suffix = engine.get_suffix();
         let path_len = self.key_path.len();
-        for entry in unwrap_io!(glob(&(self.key_path.clone() + "/**/*"))) {
+        for entry in glob(&(self.key_path.clone() + "/**/*"))? {
             match entry {
                 Ok(p) => {
                     let key_file = p.to_str().unwrap().to_string();
                     if key_file.ends_with(&suffix) {
                         if self.get_key_data(DataKey::File(&key_file), false).is_err() {
                             let key =
-                                key_file[path_len + 1..key_file.rfind(".").unwrap()].to_string();
+                                key_file[path_len + 1..key_file.rfind('.').unwrap()].to_string();
                             debug!("Broken key found: {}", key);
                             broken.push(key);
                         }
                     } else if key_file.ends_with(".tmp") {
-                        let key = key_file[path_len + 1..key_file.rfind(".").unwrap()].to_string();
+                        let key = key_file[path_len + 1..key_file.rfind('.').unwrap()].to_string();
                         debug!("Lost key found: {}", key);
                         broken.push(key);
                     }
@@ -1842,31 +1831,31 @@ impl Database {
         let suffix = engine.get_suffix();
         let path_len = self.key_path.len();
         self.cache.clear();
-        for entry in unwrap_io!(glob(&(self.key_path.clone() + "/**/*.tmp"))) {
+        for entry in glob(&(self.key_path.clone() + "/**/*.tmp"))? {
             match entry {
                 Ok(p) => {
                     let key_file = p.to_str().unwrap().to_string();
                     match self.get_key_data(DataKey::File(&key_file), false) {
                         Ok(_) => {
-                            unwrap_io!(fs::rename(
+                            fs::rename(
                                 &key_file,
-                                &(key_file[..key_file.rfind(".").unwrap()].to_string() + &suffix),
-                            ));
+                                &(key_file[..key_file.rfind('.').unwrap()].to_string() + &suffix),
+                            )?;
                             let key =
-                                key_file[path_len + 1..key_file.rfind(".").unwrap()].to_string();
+                                key_file[path_len + 1..key_file.rfind('.').unwrap()].to_string();
                             debug!("Recovered lost key {}", key);
                             result.push((key, true));
                         }
                         Err(_) => {
-                            unwrap_io!(fs::remove_file(&key_file));
+                            fs::remove_file(&key_file)?;
                             let key =
-                                key_file[path_len + 1..key_file.rfind(".").unwrap()].to_string();
+                                key_file[path_len + 1..key_file.rfind('.').unwrap()].to_string();
                             debug!("Deleted broken key {}", key);
                             result.push((key, false));
                         }
                     }
                     if self.auto_flush {
-                        let parent = key_file[..key_file.rfind("/").unwrap()].to_owned();
+                        let parent = key_file[..key_file.rfind('/').unwrap()].to_owned();
                         if !dts.contains(&parent) {
                             dts.push(parent);
                         }
@@ -1879,7 +1868,7 @@ impl Database {
         }
         if self.auto_flush {
             for dir in dts {
-                unwrap_io!(sync_dir(&dir));
+                sync_dir(&dir)?;
             }
         }
         for key in self._purge(false)? {
@@ -1894,12 +1883,9 @@ impl Database {
         debug!("Dump requested for {}", key);
         let mut result = Vec::new();
         for key in self.list_key_and_subkeys(key, true)? {
-            match self.get_key_data(DataKey::Name(&key), false) {
-                Ok(v) => {
-                    debug!("Dumped key {}", key);
-                    result.push((key, v.0));
-                }
-                Err(_) => {}
+            if let Ok(v) = self.get_key_data(DataKey::Name(&key), false) {
+                debug!("Dumped key {}", key);
+                result.push((key, v.0));
             }
         }
         Ok(result)
@@ -2197,7 +2183,7 @@ mod tests {
 
                 assert_eq!(ki.sha256.is_some(), checksums);
 
-                let se = SerializationEngine::from_str(db_format).unwrap();
+                let se = SerializationEngine::from_string(db_format).unwrap();
 
                 let key_path = db_path.to_owned() + "/keys/n/x" + se.suffix(checksums).as_str();
 

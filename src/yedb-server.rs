@@ -705,7 +705,7 @@ async fn process_request(buf: &[u8]) -> Result<Vec<u8>, YedbServerErrorKind> {
                 Some(v) => {
                     debug!("API request: key_load");
                     let result = parse_result_for_jsonrpc!(
-                        DBCELL.write().await.key_load_from_serialized(&v),
+                        DBCELL.write().await.key_load_from_serialized(v),
                         request
                     );
                     result
