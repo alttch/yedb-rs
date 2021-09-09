@@ -143,15 +143,9 @@ impl YedbClientAsync {
             None => {
                 let stream: ClientStream;
                 if self.path.starts_with("tcp://") {
-                    stream = ClientStream::Tcp(
-                        tokio::time::timeout(self.timeout, TcpStream::connect(&self.path[6..]))
-                            .await??,
-                    );
+                    stream = ClientStream::Tcp(TcpStream::connect(&self.path[6..]).await?);
                 } else {
-                    stream = ClientStream::Unix(
-                        tokio::time::timeout(self.timeout, UnixStream::connect(&self.path))
-                            .await??,
-                    );
+                    stream = ClientStream::Unix(UnixStream::connect(&self.path).await?);
                 }
                 self.stream = Some(stream);
                 Ok(self.stream.as_mut().unwrap())
@@ -161,18 +155,22 @@ impl YedbClientAsync {
 
     pub async fn call(&mut self, req: &JSONRpcRequest) -> Result<Value, Error> {
         let mut attempt = 0;
+        let started = std::time::Instant::now();
         loop {
-            match self._call(req).await {
-                Ok(v) => return Ok(v),
-                Err(e) if e.kind() == ErrorKind::ProtocolError => {
-                    attempt += 1;
-                    if attempt > self.retries {
-                        return Err(e);
-                    } else {
-                        self.stream = None;
+            match tokio::time::timeout(self.timeout - started.elapsed(), self._call(req)).await {
+                Ok(v) => match v {
+                    Ok(v) => return Ok(v),
+                    Err(e) if e.kind() == ErrorKind::ProtocolError => {
+                        attempt += 1;
+                        if attempt > self.retries {
+                            return Err(e);
+                        } else {
+                            self.stream = None;
+                        }
                     }
-                }
-                Err(e) => return Err(e),
+                    Err(e) => return Err(e),
+                },
+                Err(_) => return Err(Error::new(ErrorKind::TimeoutError, "timed out")),
             }
         }
     }
