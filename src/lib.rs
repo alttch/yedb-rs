@@ -226,6 +226,10 @@ pub mod client;
 
 pub use client::YedbClient;
 
+#[path = "client_async.rs"]
+pub mod client_async;
+pub use client_async::YedbClientAsync;
+
 #[derive(Debug)]
 enum DataKey<'a> {
     Name(&'a str),

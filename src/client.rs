@@ -9,15 +9,6 @@ use std::time::Duration;
 
 use super::common::{DBInfo, Error, ErrorKind, JSONRpcRequest, JSONRpcResponse, KeyExplained};
 
-macro_rules! unwrap_io {
-    ( $e:expr ) => {
-        match $e {
-            Ok(x) => x,
-            Err(e) => return Err(Error::new(ErrorKind::IOError, e)),
-        }
-    };
-}
-
 const INVALID_SERVER_VALUE: &str = "Invalid value received from the server";
 
 macro_rules! error_invalid_value_received {
@@ -26,22 +17,12 @@ macro_rules! error_invalid_value_received {
     };
 }
 
-macro_rules! safe_unwrap_res {
-    ( $e:expr ) => {
-        match $e {
-            Ok(x) => x,
-            Err(_) => {
-                return error_invalid_value_received!();
-            }
-        }
-    };
-}
-
 macro_rules! safe_unwrap_opt {
-    ( $e:expr ) => {
-        match $e {
-            Some(x) => x,
-            None => return error_invalid_value_received!(),
+    ( $opt:expr ) => {
+        if let Some(x) = $opt {
+            x
+        } else {
+            return error_invalid_value_received!();
         }
     };
 }
@@ -163,10 +144,10 @@ impl YedbClient {
         let buf = req.pack()?;
         frame.extend(&(buf.len() as u32).to_le_bytes());
         frame.extend(&buf);
-        let stream = unwrap_io!(self.get_stream());
-        unwrap_io!(stream.write_all(&frame));
+        let stream = self.get_stream()?;
+        stream.write_all(&frame)?;
         let mut buf = [0u8; 6];
-        unwrap_io!(stream.read_exact(&mut buf));
+        stream.read_exact(&mut buf)?;
         if buf[0] != 1 || buf[1] != 2 {
             return Err(Error::new(
                 ErrorKind::ProtocolError,
@@ -175,8 +156,8 @@ impl YedbClient {
         }
         let frame_len = u32::from_le_bytes([buf[2], buf[3], buf[4], buf[5]]) as usize;
         let mut buf = vec![0u8; frame_len];
-        unwrap_io!(stream.read_exact(&mut buf));
-        let response: JSONRpcResponse<Value> = unwrap_io!(rmp_serde::from_read_ref(&buf));
+        stream.read_exact(&mut buf)?;
+        let response: JSONRpcResponse<Value> = rmp_serde::from_read_ref(&buf)?;
         if response.id != req.id {
             return Err(Error::new(ErrorKind::ProtocolError, "invalid response id"));
         }
@@ -192,13 +173,13 @@ impl YedbClient {
     pub fn key_list(&mut self, key: &str) -> Result<Vec<String>, Error> {
         let mut req = JSONRpcRequest::new(self.gen_id(), "key_list");
         req.set_param("key", Value::from(key));
-        Ok(safe_unwrap_res!(serde_json::from_value(self.call(&req)?)))
+        Ok(serde_json::from_value(self.call(&req)?)?)
     }
 
     pub fn key_list_all(&mut self, key: &str) -> Result<Vec<String>, Error> {
         let mut req = JSONRpcRequest::new(self.gen_id(), "key_list_all");
         req.set_param("key", Value::from(key));
-        Ok(safe_unwrap_res!(serde_json::from_value(self.call(&req)?)))
+        Ok(serde_json::from_value(self.call(&req)?)?)
     }
 
     pub fn key_get(&mut self, key: &str) -> Result<Value, Error> {
@@ -217,7 +198,7 @@ impl YedbClient {
     pub fn key_get_recursive(&mut self, key: &str) -> Result<Vec<(String, Value)>, Error> {
         let mut req = JSONRpcRequest::new(self.gen_id(), "key_get_recursive");
         req.set_param("key", Value::from(key));
-        Ok(safe_unwrap_res!(serde_json::from_value(self.call(&req)?)))
+        Ok(serde_json::from_value(self.call(&req)?)?)
         //match unwrap_as_is!(self.call(&req)) {
         //Value::Array(mut v) => {
         //let mut result: HashMap<String, Value> = HashMap::new();
@@ -260,7 +241,7 @@ impl YedbClient {
     pub fn key_explain(&mut self, key: &str) -> Result<KeyExplained, Error> {
         let mut req = JSONRpcRequest::new(self.gen_id(), "key_explain");
         req.set_param("key", Value::from(key));
-        Ok(safe_unwrap_res!(serde_json::from_value(self.call(&req)?)))
+        Ok(serde_json::from_value(self.call(&req)?)?)
     }
 
     pub fn key_set(&mut self, key: &str, value: Value) -> Result<(), Error> {
@@ -318,7 +299,7 @@ impl YedbClient {
 
     pub fn info(&mut self) -> Result<DBInfo, Error> {
         let req = JSONRpcRequest::new(self.gen_id(), "info");
-        Ok(safe_unwrap_res!(serde_json::from_value(self.call(&req)?)))
+        Ok(serde_json::from_value(self.call(&req)?)?)
     }
 
     pub fn test(&mut self) -> Result<(), Error> {
@@ -328,12 +309,12 @@ impl YedbClient {
 
     pub fn check(&mut self) -> Result<Vec<String>, Error> {
         let req = JSONRpcRequest::new(self.gen_id(), "check");
-        Ok(safe_unwrap_res!(serde_json::from_value(self.call(&req)?)))
+        Ok(serde_json::from_value(self.call(&req)?)?)
     }
 
     pub fn repair(&mut self) -> Result<Vec<(String, bool)>, Error> {
         let req = JSONRpcRequest::new(self.gen_id(), "repair");
-        Ok(safe_unwrap_res!(serde_json::from_value(self.call(&req)?)))
+        Ok(serde_json::from_value(self.call(&req)?)?)
         //match unwrap_as_is!(self.call(&req)) {
         //Value::Array(mut v) => {
         //let mut result: HashMap<String, bool> = HashMap::new();
@@ -361,7 +342,7 @@ impl YedbClient {
 
     pub fn purge(&mut self) -> Result<Vec<String>, Error> {
         let req = JSONRpcRequest::new(self.gen_id(), "purge");
-        Ok(safe_unwrap_res!(serde_json::from_value(self.call(&req)?)))
+        Ok(serde_json::from_value(self.call(&req)?)?)
     }
 
     pub fn purge_cache(&mut self) -> Result<(), Error> {
@@ -378,7 +359,7 @@ impl YedbClient {
     pub fn key_dump(&mut self, key: &str) -> Result<Vec<(String, Value)>, Error> {
         let mut req = JSONRpcRequest::new(self.gen_id(), "key_dump");
         req.set_param("key", Value::from(key));
-        Ok(safe_unwrap_res!(serde_json::from_value(self.call(&req)?)))
+        Ok(serde_json::from_value(self.call(&req)?)?)
     }
 
     pub fn key_load(&mut self, data: Vec<(String, Value)>) -> Result<(), Error> {
