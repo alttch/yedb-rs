@@ -7,18 +7,39 @@ use tokio::net::UnixStream;
 
 use std::time::Duration;
 
-use super::common::{
-    DBInfo,
-    Error, ErrorKind, JSONRpcRequest, JSONRpcResponse,
-//    KeyExplained
-};
+use super::common::{DBInfo, Error, ErrorKind, JSONRpcRequest, JSONRpcResponse, KeyExplained};
 
-//const INVALID_SERVER_VALUE: &str = "Invalid value received from the server";
+const INVALID_SERVER_VALUE: &str = "Invalid value received from the server";
+
+macro_rules! error_invalid_value_received {
+    () => {
+        Err(Error::new(ErrorKind::ProtocolError, INVALID_SERVER_VALUE))
+    };
+}
+
+macro_rules! safe_unwrap_opt {
+    ( $opt:expr ) => {
+        if let Some(x) = $opt {
+            x
+        } else {
+            return error_invalid_value_received!();
+        }
+    };
+}
 
 macro_rules! result_ok {
     ( $s:expr, $r:expr ) => {
         match $s.call(&$r).await? {
             _ => Ok(()),
+        }
+    };
+}
+
+macro_rules! result_i64 {
+    ( $s:expr, $r:expr ) => {
+        match $s.call(&$r).await? {
+            Value::Number(v) => Ok(safe_unwrap_opt!(v.as_i64())),
+            _ => error_invalid_value_received!(),
         }
     };
 }
@@ -186,6 +207,138 @@ impl YedbClientAsync {
             },
         }
     }
+    pub async fn key_list(&mut self, key: &str) -> Result<Vec<String>, Error> {
+        let mut req = JSONRpcRequest::new(self.gen_id(), "key_list");
+        req.set_param("key", Value::from(key));
+        Ok(serde_json::from_value(self.call(&req).await?)?)
+    }
+
+    pub async fn key_list_all(&mut self, key: &str) -> Result<Vec<String>, Error> {
+        let mut req = JSONRpcRequest::new(self.gen_id(), "key_list_all");
+        req.set_param("key", Value::from(key));
+        Ok(serde_json::from_value(self.call(&req).await?)?)
+    }
+
+    pub async fn key_get(&mut self, key: &str) -> Result<Value, Error> {
+        let mut req = JSONRpcRequest::new(self.gen_id(), "key_get");
+        req.set_param("key", Value::from(key));
+        self.call(&req).await
+    }
+
+    pub async fn key_get_field(&mut self, key: &str, field: &str) -> Result<Value, Error> {
+        let mut req = JSONRpcRequest::new(self.gen_id(), "key_get_field");
+        req.set_param("key", Value::from(key));
+        req.set_param("field", Value::from(field));
+        self.call(&req).await
+    }
+
+    pub async fn key_get_recursive(&mut self, key: &str) -> Result<Vec<(String, Value)>, Error> {
+        let mut req = JSONRpcRequest::new(self.gen_id(), "key_get_recursive");
+        req.set_param("key", Value::from(key));
+        Ok(serde_json::from_value(self.call(&req).await?)?)
+        //match unwrap_as_is!(self.call(&req)) {
+        //Value::Array(mut v) => {
+        //let mut result: HashMap<String, Value> = HashMap::new();
+        //loop {
+        //match v.pop() {
+        //Some(mut kv) => {
+        //let arr = safe_unwrap_opt!(kv.as_array_mut());
+        //let value = safe_unwrap_opt!(arr.pop());
+        //let key = safe_unwrap_opt!(arr.pop());
+        //match key {
+        //Value::String(s) => {
+        //result.insert(s, value);
+        //}
+        //_ => return error_invalid_value_received!(),
+        //}
+        //}
+        //None => break,
+        //}
+        //}
+        //Ok(result)
+        //}
+        //_ => error_invalid_value_received!(),
+        //}
+    }
+
+    pub async fn key_copy(&mut self, key: &str, dst_key: &str) -> Result<(), Error> {
+        let mut req = JSONRpcRequest::new(self.gen_id(), "key_copy");
+        req.set_param("key", Value::from(key));
+        req.set_param("dst_key", Value::from(dst_key));
+        result_ok!(self, req)
+    }
+
+    pub async fn key_rename(&mut self, key: &str, dst_key: &str) -> Result<(), Error> {
+        let mut req = JSONRpcRequest::new(self.gen_id(), "key_rename");
+        req.set_param("key", Value::from(key));
+        req.set_param("dst_key", Value::from(dst_key));
+        result_ok!(self, req)
+    }
+
+    pub async fn key_explain(&mut self, key: &str) -> Result<KeyExplained, Error> {
+        let mut req = JSONRpcRequest::new(self.gen_id(), "key_explain");
+        req.set_param("key", Value::from(key));
+        Ok(serde_json::from_value(self.call(&req).await?)?)
+    }
+
+    pub async fn key_set(&mut self, key: &str, value: Value) -> Result<(), Error> {
+        let mut req = JSONRpcRequest::new(self.gen_id(), "key_set");
+        req.set_param("key", Value::from(key));
+        req.set_param("value", value);
+        result_ok!(self, req)
+    }
+
+    pub async fn key_set_field(
+        &mut self,
+        key: &str,
+        field: &str,
+        value: Value,
+    ) -> Result<(), Error> {
+        let mut req = JSONRpcRequest::new(self.gen_id(), "key_set_field");
+        req.set_param("key", Value::from(key));
+        req.set_param("field", Value::from(field));
+        req.set_param("value", value);
+        result_ok!(self, req)
+    }
+
+    pub async fn key_delete_field(&mut self, key: &str, field: &str) -> Result<(), Error> {
+        let mut req = JSONRpcRequest::new(self.gen_id(), "key_delete_field");
+        req.set_param("key", Value::from(key));
+        req.set_param("field", Value::from(field));
+        result_ok!(self, req)
+    }
+
+    pub async fn key_increment(&mut self, key: &str) -> Result<i64, Error> {
+        let mut req = JSONRpcRequest::new(self.gen_id(), "key_increment");
+        req.set_param("key", Value::from(key));
+        result_i64!(self, req)
+    }
+
+    pub async fn key_decrement(&mut self, key: &str) -> Result<i64, Error> {
+        let mut req = JSONRpcRequest::new(self.gen_id(), "key_decrement");
+        req.set_param("key", Value::from(key));
+        result_i64!(self, req)
+    }
+
+    pub async fn key_delete(&mut self, key: &str) -> Result<(), Error> {
+        let mut req = JSONRpcRequest::new(self.gen_id(), "key_delete");
+        req.set_param("key", Value::from(key));
+        result_ok!(self, req)
+    }
+
+    pub async fn key_delete_recursive(&mut self, key: &str) -> Result<(), Error> {
+        let mut req = JSONRpcRequest::new(self.gen_id(), "key_delete_recursive");
+        req.set_param("key", Value::from(key));
+        result_ok!(self, req)
+    }
+
+    pub async fn server_set(&mut self, name: &str, value: Value) -> Result<(), Error> {
+        let mut req = JSONRpcRequest::new(self.gen_id(), "server_set");
+        req.set_param("name", Value::from(name));
+        req.set_param("value", value);
+        result_ok!(self, req)
+    }
+
     pub async fn info(&mut self) -> Result<DBInfo, Error> {
         let req = JSONRpcRequest::new(self.gen_id(), "info");
         Ok(serde_json::from_value(self.call(&req).await?)?)
@@ -193,6 +346,70 @@ impl YedbClientAsync {
 
     pub async fn test(&mut self) -> Result<(), Error> {
         let req = JSONRpcRequest::new(self.gen_id(), "test");
+        result_ok!(self, req)
+    }
+    pub async fn check(&mut self) -> Result<Vec<String>, Error> {
+        let req = JSONRpcRequest::new(self.gen_id(), "check");
+        Ok(serde_json::from_value(self.call(&req).await?)?)
+    }
+
+    pub async fn repair(&mut self) -> Result<Vec<(String, bool)>, Error> {
+        let req = JSONRpcRequest::new(self.gen_id(), "repair");
+        Ok(serde_json::from_value(self.call(&req).await?)?)
+        //match unwrap_as_is!(self.call(&req)) {
+        //Value::Array(mut v) => {
+        //let mut result: HashMap<String, bool> = HashMap::new();
+        //loop {
+        //match v.pop() {
+        //Some(mut kv) => {
+        //let arr = safe_unwrap_opt!(kv.as_array_mut());
+        //let value = safe_unwrap_opt!(arr.pop());
+        //let key = safe_unwrap_opt!(arr.pop());
+        //match key {
+        //Value::String(s) => {
+        //result.insert(s, safe_unwrap_opt!(value.as_bool()));
+        //}
+        //_ => return error_invalid_value_received!(),
+        //}
+        //}
+        //None => break,
+        //}
+        //}
+        //Ok(result)
+        //}
+        //_ => error_invalid_value_received!(),
+        //}
+    }
+
+    pub async fn purge(&mut self) -> Result<Vec<String>, Error> {
+        let req = JSONRpcRequest::new(self.gen_id(), "purge");
+        Ok(serde_json::from_value(self.call(&req).await?)?)
+    }
+
+    pub async fn purge_cache(&mut self) -> Result<(), Error> {
+        let req = JSONRpcRequest::new(self.gen_id(), "purge_cache");
+        result_ok!(self, req)
+    }
+
+    #[allow(dead_code)]
+    pub async fn safe_purge(&mut self) -> Result<(), Error> {
+        let req = JSONRpcRequest::new(self.gen_id(), "safe_purge");
+        result_ok!(self, req)
+    }
+
+    pub async fn key_dump(&mut self, key: &str) -> Result<Vec<(String, Value)>, Error> {
+        let mut req = JSONRpcRequest::new(self.gen_id(), "key_dump");
+        req.set_param("key", Value::from(key));
+        Ok(serde_json::from_value(self.call(&req).await?)?)
+    }
+
+    pub async fn key_load(&mut self, data: Vec<(String, Value)>) -> Result<(), Error> {
+        let mut req = JSONRpcRequest::new(self.gen_id(), "key_load");
+        let data_to_load: Vec<Value> = data
+            .into_iter()
+            .map(|v| Value::from(vec![Value::from(v.0), v.1]))
+            .collect();
+        req.set_param("data", Value::from(data_to_load));
         result_ok!(self, req)
     }
 }
