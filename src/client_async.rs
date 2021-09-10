@@ -187,29 +187,6 @@ impl YedbClientAsync {
         let mut req = JSONRpcRequest::new(self.gen_id(), "key_get_recursive");
         req.set_param("key", Value::from(key));
         Ok(serde_json::from_value(self.call(&req).await?)?)
-        //match unwrap_as_is!(self.call(&req)) {
-        //Value::Array(mut v) => {
-        //let mut result: HashMap<String, Value> = HashMap::new();
-        //loop {
-        //match v.pop() {
-        //Some(mut kv) => {
-        //let arr = safe_unwrap_opt!(kv.as_array_mut());
-        //let value = safe_unwrap_opt!(arr.pop());
-        //let key = safe_unwrap_opt!(arr.pop());
-        //match key {
-        //Value::String(s) => {
-        //result.insert(s, value);
-        //}
-        //_ => return error_invalid_value_received!(),
-        //}
-        //}
-        //None => break,
-        //}
-        //}
-        //Ok(result)
-        //}
-        //_ => error_invalid_value_received!(),
-        //}
     }
 
     pub async fn key_copy(&mut self, key: &str, dst_key: &str) -> Result<(), Error> {
@@ -307,29 +284,6 @@ impl YedbClientAsync {
     pub async fn repair(&mut self) -> Result<Vec<(String, bool)>, Error> {
         let req = JSONRpcRequest::new(self.gen_id(), "repair");
         Ok(serde_json::from_value(self.call(&req).await?)?)
-        //match unwrap_as_is!(self.call(&req)) {
-        //Value::Array(mut v) => {
-        //let mut result: HashMap<String, bool> = HashMap::new();
-        //loop {
-        //match v.pop() {
-        //Some(mut kv) => {
-        //let arr = safe_unwrap_opt!(kv.as_array_mut());
-        //let value = safe_unwrap_opt!(arr.pop());
-        //let key = safe_unwrap_opt!(arr.pop());
-        //match key {
-        //Value::String(s) => {
-        //result.insert(s, safe_unwrap_opt!(value.as_bool()));
-        //}
-        //_ => return error_invalid_value_received!(),
-        //}
-        //}
-        //None => break,
-        //}
-        //}
-        //Ok(result)
-        //}
-        //_ => error_invalid_value_received!(),
-        //}
     }
 
     pub async fn purge(&mut self) -> Result<Vec<String>, Error> {

@@ -3,11 +3,11 @@ VERSION=0.1.0
 all: test
 
 test:
-	cargo build
+	cargo build --features server
 	./target/debug/yedb-server /tmp/yedb-test-db1 --pid-file /tmp/yedb-server-test.pid -v &
 	sleep 0.1
 	#cargo test -- --test-threads=1 --nocapture
-	cargo test -- --nocapture
+	cargo test --features client-sync -- --nocapture
 	kill `cat /tmp/yedb-server-test.pid`
 	sleep 0.5
 	rm -rf /tmp/yedb-test-db1
