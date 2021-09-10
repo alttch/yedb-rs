@@ -1,4 +1,15 @@
-//! # yedb - rugged embedded and client/server key-value database (Rust implementation)
+//! # yedb - rugged crash-free embedded and client/server key-value database (Rust implementation)
+//! 
+//! ## Cargo crate
+//! 
+//! [crates.io/crates/yedb](https://crates.io/crates/yedb)
+//! 
+//! Features:
+//! 
+//! - **client-sync** synchronous client
+//! - **client-async** asynchronous client
+//! - **cli** yedb-cli
+//! - **server** yedb-server
 //! 
 //! ## Why YEDB?
 //! 
@@ -18,7 +29,7 @@
 //! [![Power loss data survive
 //! demo](https://img.youtube.com/vi/i3hSWjrNqLo/0.jpg)](https://www.youtube.com/watch?v=i3hSWjrNqLo)
 //! 
-//! https://www.youtube.com/watch?v=i3hSWjrNqLo
+//! <https://www.youtube.com/watch?v=i3hSWjrNqLo>
 //! 
 //! 
 //! YEDB is absolutely reliable rugged key-value database, which can survive in any
@@ -111,16 +122,62 @@
 //! use yedb::YedbClient;
 //! use serde_json::Value;
 //! 
-//! let mut db = YedbClient::new("tcp://127.0.0.1:8870");
+//! let mut client = YedbClient::new("tcp://127.0.0.1:8870");
 //! let key_name = "test/key1";
-//! db.key_set(&key_name, Value::from(123u8)).unwrap();
-//! println!("{:?}", db.key_get(&key_name));
-//! db.key_delete(&key_name).unwrap();
+//! client.key_set(&key_name, Value::from(123u8)).unwrap();
+//! println!("{:?}", client.key_get(&key_name));
+//! client.key_delete(&key_name).unwrap();
 //! ```
 //! 
-//! ## Cargo crate
+//! ### Async TCP/Unix socket client example
 //! 
-//! [crates.io/crates/yedb](https://crates.io/crates/yedb)
+//! ```rust
+//! use serde_json::Value;
+//! use yedb::YedbClientAsync;
+//! 
+//! async fn test() {
+//!     let mut client = YedbClientAsync::new("tcp://127.0.0.1:8870");
+//!     let key_name = "test/key1";
+//!     client.key_set(&key_name, Value::from(123u8)).await.unwrap();
+//!     println!("{:?}", client.key_get(&key_name).await);
+//!     client.key_delete(&key_name).await.unwrap();
+//! }
+//! ```
+//! 
+//! ### Async TCP/Unix socket client pool example
+//! 
+//! ```rust
+//! use serde_json::Value;
+//! use std::sync::Arc;
+//! use std::time::Duration;
+//! use yedb::YedbClientPoolAsync;
+//! 
+//! async fn test() {
+//!     let pool = Arc::new(
+//!         YedbClientPoolAsync::create()
+//!             .size(10)
+//!             .path("tcp://127.0.0.1:8870")
+//!             .retries(3)
+//!             .timeout(Duration::from_secs(2))
+//!             .build(),
+//!     );
+//!     let mut futs = Vec::new();
+//!     for i in 0..10 {
+//!         let task_pool = pool.clone();
+//!         let fut = tokio::spawn(async move {
+//!             let mut client = task_pool.get().await;
+//!             let key = format!("test/key{}", i);
+//!             client.key_set(&key, Value::from(i)).await.unwrap();
+//!             println!("{}", client.key_get(&key).await.unwrap());
+//!             client.key_delete(&key).await.unwrap();
+//!         });
+//!         futs.push(fut);
+//!     }
+//!     for fut in futs {
+//!         fut.await.unwrap();
+//!     }
+//! }
+//! ```
 //! 
 //! ## Specification
 //! 
