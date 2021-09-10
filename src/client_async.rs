@@ -7,6 +7,66 @@ use tokio::net::UnixStream;
 use std::time::Duration;
 
 use super::common::{DBInfo, Error, ErrorKind, JSONRpcRequest, JSONRpcResponse, KeyExplained};
+use simple_pool::{ResourcePool, ResourcePoolGuard};
+
+pub struct YedbClientPoolAsyncBuilder {}
+
+pub struct YedbClientPoolAsync {
+    pool: ResourcePool<YedbClientAsync>,
+    size: usize,
+    path: String,
+    retries: u8,
+    timeout: Duration,
+}
+
+impl Default for YedbClientPoolAsync {
+    fn default() -> Self {
+        Self::create()
+    }
+}
+
+impl YedbClientPoolAsync {
+    pub fn create() -> Self {
+        Self {
+            pool: ResourcePool::new(),
+            size: 5,
+            path: String::new(),
+            retries: 3,
+            timeout: Duration::from_secs(30),
+        }
+    }
+    pub fn size(mut self, size: usize) -> Self {
+        self.size = size;
+        self
+    }
+    pub fn path(mut self, path: &str) -> Self {
+        self.path = path.to_owned();
+        self
+    }
+    pub fn retries(mut self, retries: u8) -> Self {
+        self.retries = retries;
+        self
+    }
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = timeout;
+        self
+    }
+    pub fn build(self) -> Self {
+        {
+            let mut holder = self.pool.holder.lock().unwrap();
+            for _ in 0..self.size {
+                let mut client = YedbClientAsync::new(&self.path);
+                client.retries = self.retries;
+                client.timeout = self.timeout;
+                holder.resources.push(client);
+            }
+        }
+        self
+    }
+    pub async fn get(&self) -> ResourcePoolGuard<YedbClientAsync> {
+        self.pool.get().await
+    }
+}
 
 const INVALID_SERVER_VALUE: &str = "Invalid value received from the server";
 

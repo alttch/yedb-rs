@@ -232,6 +232,8 @@ pub use client::YedbClient;
 pub mod client_async;
 #[cfg(feature = "client-async")]
 pub use client_async::YedbClientAsync;
+#[cfg(feature = "client-async")]
+pub use client_async::YedbClientPoolAsync;
 
 #[derive(Debug)]
 enum DataKey<'a> {
