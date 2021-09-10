@@ -1,4 +1,4 @@
-# yedb - rugged embedded and client/server key-value database (Rust implementation)
+# yedb - rugged crash-free embedded and client/server key-value database (Rust implementation)
 
 ## Cargo crate
 
