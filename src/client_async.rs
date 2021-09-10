@@ -1,7 +1,6 @@
 use serde_json::Value;
 
-use std::io;
-use tokio::io::Interest;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::net::UnixStream;
 
@@ -49,63 +48,17 @@ enum ClientStream {
     Unix(UnixStream),
 }
 
-macro_rules! read_stream {
-    ($stream: expr, $buf: expr) => {{
-        let _ready = $stream.ready(Interest::READABLE).await?;
-        loop {
-            match $stream.try_read($buf) {
-                Ok(_) => {
-                    return Ok(());
-                }
-                Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
-                    continue;
-                }
-                Err(e) => {
-                    return Err(e);
-                }
-            }
-        }
-    }};
-}
-
-macro_rules! write_stream {
-    ($stream: expr, $buf: expr) => {{
-        let _ready = $stream.ready(Interest::WRITABLE).await?;
-        loop {
-            match $stream.try_write($buf) {
-                Ok(_) => {
-                    return Ok(());
-                }
-                Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
-                    continue;
-                }
-                Err(e) => {
-                    return Err(e);
-                }
-            }
-        }
-    }};
-}
-
 impl ClientStream {
-    async fn read(&mut self, buf: &mut [u8]) -> Result<(), std::io::Error> {
+    async fn read(&mut self, buf: &mut [u8]) -> Result<usize, std::io::Error> {
         match self {
-            ClientStream::Tcp(v) => {
-                read_stream!(v, buf)
-            }
-            ClientStream::Unix(v) => {
-                read_stream!(v, buf)
-            }
+            ClientStream::Tcp(v) => v.read_exact(buf).await,
+            ClientStream::Unix(v) => v.read_exact(buf).await,
         }
     }
     async fn write(&mut self, buf: &[u8]) -> Result<(), std::io::Error> {
         match self {
-            ClientStream::Tcp(v) => {
-                write_stream!(v, buf)
-            }
-            ClientStream::Unix(v) => {
-                write_stream!(v, buf)
-            }
+            ClientStream::Tcp(v) => v.write_all(buf).await,
+            ClientStream::Unix(v) => v.write_all(buf).await,
         }
     }
 }
