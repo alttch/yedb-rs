@@ -54,6 +54,7 @@ impl YedbClientPoolAsync {
     pub fn build(self) -> Self {
         {
             let mut holder = self.pool.holder.lock().unwrap();
+            holder.resources.clear();
             for _ in 0..self.size {
                 let mut client = YedbClientAsync::new(&self.path);
                 client.retries = self.retries;
