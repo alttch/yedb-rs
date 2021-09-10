@@ -1,5 +1,16 @@
 # yedb - rugged embedded and client/server key-value database (Rust implementation)
 
+## Cargo crate
+
+[crates.io/crates/yedb](https://crates.io/crates/yedb)
+
+Features:
+
+- **client-sync** synchronous client
+- **client-async** asynchronous client
+- **cli** yedb-cli
+- **server** yedb-server
+
 ## Why YEDB?
 
 - Is it fast?
@@ -117,10 +128,6 @@ db.key_set(&key_name, Value::from(123u8)).unwrap();
 println!("{:?}", db.key_get(&key_name));
 db.key_delete(&key_name).unwrap();
 ```
-
-## Cargo crate
-
-[crates.io/crates/yedb](https://crates.io/crates/yedb)
 
 ## Specification
 

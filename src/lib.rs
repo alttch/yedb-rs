@@ -221,13 +221,16 @@ impl ExplainValue for Value {
 pub mod common;
 pub use common::{DBInfo, Error, ErrorKind, KeyExplained};
 
+#[cfg(any(feature = "client-sync", feature = "cli"))]
 #[path = "client.rs"]
 pub mod client;
-
+#[cfg(any(feature = "client-sync", feature = "cli"))]
 pub use client::YedbClient;
 
+#[cfg(feature = "client-async")]
 #[path = "client_async.rs"]
 pub mod client_async;
+#[cfg(feature = "client-async")]
 pub use client_async::YedbClientAsync;
 
 #[derive(Debug)]
