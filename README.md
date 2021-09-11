@@ -159,7 +159,7 @@ async fn test() {
             .path("tcp://127.0.0.1:8870")
             .retries(3)
             .timeout(Duration::from_secs(2))
-            .build(),
+            .build()
     );
     let mut futs = Vec::new();
     for i in 0..10 {
