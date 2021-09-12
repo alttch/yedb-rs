@@ -110,7 +110,7 @@ let mut db = Database::new();
 db.set_db_path("/tmp/db1").unwrap();
 db.open().unwrap();
 let key_name = "test/key1";
-db.key_set(&key_name, Value::from(123u8)).unwrap();
+db.key_set(&key_name, Value::from(123_u8)).unwrap();
 println!("{:?}", db.key_get(&key_name));
 db.key_delete(&key_name).unwrap();
 db.close().unwrap();
@@ -124,7 +124,7 @@ use serde_json::Value;
 
 let mut client = YedbClient::new("tcp://127.0.0.1:8870");
 let key_name = "test/key1";
-client.key_set(&key_name, Value::from(123u8)).unwrap();
+client.key_set(&key_name, Value::from(123_u8)).unwrap();
 println!("{:?}", client.key_get(&key_name));
 client.key_delete(&key_name).unwrap();
 ```
@@ -138,7 +138,7 @@ use yedb::YedbClientAsync;
 async fn test() {
     let mut client = YedbClientAsync::new("tcp://127.0.0.1:8870");
     let key_name = "test/key1";
-    client.key_set(&key_name, Value::from(123u8)).await.unwrap();
+    client.key_set(&key_name, Value::from(123_u8)).await.unwrap();
     println!("{:?}", client.key_get(&key_name).await);
     client.key_delete(&key_name).await.unwrap();
 }
