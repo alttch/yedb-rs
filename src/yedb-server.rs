@@ -415,7 +415,9 @@ async fn process_request(buf: &[u8]) -> Result<Vec<u8>, YedbServerErrorKind> {
     Ok(match request.method.as_str() {
         "test" => {
             debug!("API request: test");
-            run_request!(vec![], { encode_jsonrpc_response!(request.respond_ok()) })
+            run_request!(vec![], {
+                encode_jsonrpc_response!(request.respond(yedb::ServerInfo::new()))
+            })
         }
         "info" => {
             debug!("API request: info");
