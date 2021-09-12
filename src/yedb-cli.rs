@@ -10,7 +10,7 @@ use std::io::prelude::*;
 use std::io::{self, Read};
 
 use colored::Colorize;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, SystemTime};
 
 use chrono::{DateTime, Local};
 use yedb::{Error, ErrorKind, SerializationEngine, YedbClient, ENGINE_VERSION, VERSION};
@@ -19,6 +19,9 @@ use clap::Clap;
 
 #[macro_use]
 extern crate prettytable;
+
+#[macro_use]
+extern crate bma_benchmark;
 
 const DUMP_BUF_SIZE: usize = 32768;
 
@@ -44,9 +47,9 @@ impl fmt::Display for BenchmarkOp {
             f,
             "{}",
             match self {
-                BenchmarkOp::Set => "set",
-                BenchmarkOp::Get => "get",
-                BenchmarkOp::GetCached => "get(cached)",
+                BenchmarkOp::Set => "key_set",
+                BenchmarkOp::Get => "key_get",
+                BenchmarkOp::GetCached => "key_get(cached)",
             }
         )
     }
@@ -55,12 +58,11 @@ impl fmt::Display for BenchmarkOp {
 #[allow(clippy::cast_precision_loss)]
 #[allow(clippy::cast_possible_truncation)]
 #[allow(clippy::cast_sign_loss)]
-fn benchmark(db: &mut YedbClient, nt: usize) {
-    let n = 10_000;
+fn benchmark(db: &mut YedbClient, nt: u32, iterations: u32) {
     let i = db.info().unwrap();
     let old_cache_size = i.cache_size;
     db.key_delete_recursive(".benchmark").unwrap();
-    db.server_set("cache_size", Value::from(n * 4)).unwrap();
+    db.server_set("cache_size", Value::from(iterations * 4)).unwrap();
     let test_number = Value::from(777.777);
     let mut test_string = String::new();
     for _ in 0..1000 {
@@ -82,7 +84,7 @@ fn benchmark(db: &mut YedbClient, nt: usize) {
             ("object", test_dict.clone()),
         ] {
             let mut handlers = Vec::new();
-            let t_start = Instant::now();
+            staged_benchmark_start!(&format!("{} {}", bm_op, op.0));
             for thread_no in 0..nt {
                 let op = op.clone();
                 let op_name = op.0;
@@ -90,7 +92,7 @@ fn benchmark(db: &mut YedbClient, nt: usize) {
                 let db_path = db.path.clone();
                 let t = std::thread::spawn(move || {
                     let mut session = YedbClient::new(&db_path);
-                    for x in 0..(n / nt) {
+                    for x in 0..(iterations / nt) {
                         let key_name = format!(".benchmark/t{}/{}_{}", thread_no, &op_name, x);
                         match bm_op {
                             BenchmarkOp::Set => {
@@ -107,32 +109,20 @@ fn benchmark(db: &mut YedbClient, nt: usize) {
             for h in handlers {
                 h.join().unwrap();
             }
-            let duration = Instant::now() - t_start;
-            let op_name = format!("{}/{}", bm_op.to_string(), op.0);
-            println!(
-                "{}: {} ops/sec",
-                match bm_op {
-                    BenchmarkOp::Set => op_name.blue().bold(),
-                    _ => op_name.green().bold(),
-                },
-                (((n as f64) / (duration.as_micros() as f64 / 1_000_000_f64)) as u64)
-                    .to_string()
-                    .yellow()
-            );
+            staged_benchmark_finish_current!(iterations);
         }
         if bm_op == BenchmarkOp::Set {
             db.purge_cache().unwrap();
         }
-        println!();
     }
     let mut handlers = Vec::new();
-    let t_start = Instant::now();
+    staged_benchmark_start!("key_increment");
     for thread_no in 0..nt {
         let db_path = db.path.clone();
         let t = std::thread::spawn(move || {
             let mut session = YedbClient::new(&db_path);
             let key_name = format!(".benchmark/incr/increment_{}", thread_no);
-            for _ in 0..(n / nt) {
+            for _ in 0..(iterations / nt) {
                 session.key_increment(&key_name).unwrap();
             }
         });
@@ -141,20 +131,13 @@ fn benchmark(db: &mut YedbClient, nt: usize) {
     for h in handlers {
         h.join().unwrap();
     }
-    let duration = Instant::now() - t_start;
-    println!(
-        "{}: {} ops/sec",
-        "increment".cyan().bold(),
-        (((n as f64) / (duration.as_micros() as f64 / 1_000_000_f64)) as u64)
-            .to_string()
-            .yellow()
-    );
-    db.key_delete_recursive(".benchmark").unwrap();
-    println!();
+    staged_benchmark_finish_current!(iterations);
     println!("Cleaning up...");
+    db.key_delete_recursive(".benchmark").unwrap();
     db.purge().unwrap();
     db.server_set("cache_size", Value::from(old_cache_size))
         .unwrap();
+    staged_benchmark_print!();
 }
 
 #[derive(Clap)]
@@ -252,7 +235,9 @@ struct ServerPropCommand {
 #[derive(Clap)]
 struct BenchmarkCommand {
     #[clap(long, default_value = "4")]
-    threads: usize,
+    threads: u32,
+    #[clap(long, default_value = "10000")]
+    iterations: u32,
 }
 
 #[derive(Clap)]
@@ -835,7 +820,7 @@ fn main() {
             }
         },
         Cmd::Benchmark(c) => {
-            benchmark(&mut db, c.threads);
+            benchmark(&mut db, c.threads, c.iterations);
             0
         }
         Cmd::Server(c) => output_result_ok(server_set_prop(&mut db, &c.prop, c.value)),
