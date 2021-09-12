@@ -12,8 +12,8 @@ use std::io::{self, Read};
 use colored::Colorize;
 use std::time::{Duration, Instant, SystemTime};
 
-use chrono::*;
-use yedb::*;
+use chrono::{DateTime, Local};
+use yedb::{Error, ErrorKind, SerializationEngine, YedbClient, ENGINE_VERSION, VERSION};
 
 use clap::Clap;
 
@@ -40,19 +40,21 @@ enum BenchmarkOp {
 
 impl fmt::Display for BenchmarkOp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use BenchmarkOp::*;
         write!(
             f,
             "{}",
             match self {
-                Set => "set",
-                Get => "get",
-                GetCached => "get(cached)",
+                BenchmarkOp::Set => "set",
+                BenchmarkOp::Get => "get",
+                BenchmarkOp::GetCached => "get(cached)",
             }
         )
     }
 }
 
+#[allow(clippy::cast_precision_loss)]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_sign_loss)]
 fn benchmark(db: &mut YedbClient, nt: usize) {
     let n = 10_000;
     let i = db.info().unwrap();
@@ -69,7 +71,7 @@ fn benchmark(db: &mut YedbClient, nt: usize) {
     let test_array = Value::from(test_array);
     let mut test_dict = serde_json::Map::new();
     for i in 0..100 {
-        test_dict.insert(format!("v{}", i), Value::from(i as f64 * 777.777));
+        test_dict.insert(format!("v{}", i), Value::from(f64::from(i) * 777.777));
     }
     let test_dict = Value::from(test_dict);
     for bm_op in [BenchmarkOp::Set, BenchmarkOp::Get, BenchmarkOp::GetCached] {
@@ -113,7 +115,7 @@ fn benchmark(db: &mut YedbClient, nt: usize) {
                     BenchmarkOp::Set => op_name.blue().bold(),
                     _ => op_name.green().bold(),
                 },
-                (((n as f64) / (duration.as_micros() as f64 / 1_000_000f64)) as u64)
+                (((n as f64) / (duration.as_micros() as f64 / 1_000_000_f64)) as u64)
                     .to_string()
                     .yellow()
             );
@@ -143,7 +145,7 @@ fn benchmark(db: &mut YedbClient, nt: usize) {
     println!(
         "{}: {} ops/sec",
         "increment".cyan().bold(),
-        (((n as f64) / (duration.as_micros() as f64 / 1_000_000f64)) as u64)
+        (((n as f64) / (duration.as_micros() as f64 / 1_000_000_f64)) as u64)
             .to_string()
             .yellow()
     );
@@ -366,20 +368,18 @@ impl std::str::FromStr for SetType {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        use SetType::*;
         match s {
-            "number" => Ok(Num),
-            "string" => Ok(Str),
-            "boolean" => Ok(Bool),
-            "json" => Ok(Json),
-            "yaml" => Ok(Yaml),
+            "number" => Ok(SetType::Num),
+            "string" => Ok(SetType::Str),
+            "boolean" => Ok(SetType::Bool),
+            "json" => Ok(SetType::Json),
+            "yaml" => Ok(SetType::Yaml),
             _ => Err(Error::new(ErrorKind::Other, "Invalid type")),
         }
     }
 }
 
 fn format_value(value: String, p: SetType) -> Result<Value, Error> {
-    use SetType::*;
     let s = match value.as_str() {
         "-" => {
             let mut buffer = String::new();
@@ -394,24 +394,24 @@ fn format_value(value: String, p: SetType) -> Result<Value, Error> {
         _ => value,
     };
     match p {
-        Num => match s.parse::<i64>() {
+        SetType::Num => match s.parse::<i64>() {
             Ok(v) => Ok(Value::from(v)),
             Err(_) => match s.parse::<f64>() {
                 Ok(v) => Ok(Value::from(v)),
                 Err(e) => Err(Error::new(ErrorKind::Other, e)),
             },
         },
-        Str => Ok(Value::String(s)),
-        Bool => match s.as_str() {
+        SetType::Str => Ok(Value::String(s)),
+        SetType::Bool => match s.as_str() {
             "true" => Ok(Value::from(true)),
             "false" => Ok(Value::from(false)),
             _ => Err(Error::new(ErrorKind::Other, "value error")),
         },
-        Json => match serde_json::from_str(&s) {
+        SetType::Json => match serde_json::from_str(&s) {
             Ok(v) => Ok(v),
             Err(e) => Err(Error::new(ErrorKind::Other, e)),
         },
-        Yaml => match serde_yaml::from_str(&s) {
+        SetType::Yaml => match serde_yaml::from_str(&s) {
             Ok(v) => Ok(v),
             Err(e) => Err(Error::new(ErrorKind::Other, e)),
         },
@@ -476,7 +476,7 @@ fn output_value<T: std::fmt::Display>(value: T) {
 }
 
 fn output_error<T: std::fmt::Display>(err: T) {
-    eprintln!("{}", err.to_string().red())
+    eprintln!("{}", err.to_string().red());
 }
 
 macro_rules! output_editor_error {
@@ -547,7 +547,7 @@ fn edit_key(db: &mut YedbClient, key: &str, value: Option<&Value>) -> i32 {
             code = 3;
         }
     }
-    let _ = fs::remove_file(&temp_file_name);
+    let _r = fs::remove_file(&temp_file_name);
     code
 }
 
@@ -565,15 +565,8 @@ macro_rules! format_bool {
 
 fn server_set_prop(db: &mut YedbClient, prop: &str, value: String) -> Result<(), Error> {
     let val = match prop {
-        "auto_flush" => format_bool!(value),
-        "repair_recommended" => format_bool!(value),
-        "cache_size" => match value.parse::<usize>() {
-            Ok(v) => Value::from(v),
-            Err(e) => {
-                return Err(Error::new(ErrorKind::Other, e));
-            }
-        },
-        "auto_bak" => match value.parse::<usize>() {
+        "auto_flush" | "repair_recommended" => format_bool!(value),
+        "cache_size" | "auto_bak" => match value.parse::<usize>() {
             Ok(v) => Value::from(v),
             Err(e) => {
                 return Err(Error::new(ErrorKind::Other, e));
@@ -615,9 +608,10 @@ fn _format_debug_value(value: &Value) -> String {
             .replace("\t", " "),
         _ => value.to_string(),
     };
-    match s.len() > 79 {
-        true => s[..76].to_owned() + "...",
-        false => s,
+    if s.len() > 79 {
+        s[..76].to_owned() + "..."
+    } else {
+        s
     }
 }
 
@@ -648,6 +642,7 @@ fn display_obj(obj: &serde_json::map::Map<String, Value>) {
     table.printstd();
 }
 
+#[allow(clippy::cast_possible_truncation)]
 fn save_dump(db: &mut YedbClient, key: &str, file_name: &str) -> Result<usize, Error> {
     let key_data: Vec<(String, Value)> = db.key_dump(key)?;
     let mut f = unwrap_io!(fs::File::create(file_name));
@@ -740,7 +735,7 @@ fn load_dump(db: &mut YedbClient, file_name: &str, mode: DumpLoadMode) -> Result
 
     let mut f = unwrap_io!(Reader::open(file_name));
     let mut keys_loaded = 0;
-    let mut buf = vec![0u8; 2];
+    let mut buf = vec![0_u8; 2];
     unwrap_io!(f.read_exact(&mut buf));
     if buf[0] != ENGINE_VERSION {
         return Err(Error::new(
@@ -756,11 +751,11 @@ fn load_dump(db: &mut YedbClient, file_name: &str, mode: DumpLoadMode) -> Result
     }
     let mut data_buf: Vec<(String, Value)> = Vec::new();
     loop {
-        let mut buf = vec![0u8; 4];
+        let mut buf = vec![0_u8; 4];
         match f.read_exact(&mut buf) {
             Ok(_) => {
                 let data_len = u32::from_le_bytes([buf[0], buf[1], buf[2], buf[3]]);
-                let mut buf = vec![0u8; data_len as usize];
+                let mut buf = vec![0_u8; data_len as usize];
                 unwrap_io!(f.read_exact(&mut buf));
                 data_buf.push(match rmp_serde::from_read_ref(&buf) {
                     Ok(v) => v,
@@ -783,7 +778,7 @@ fn load_dump(db: &mut YedbClient, file_name: &str, mode: DumpLoadMode) -> Result
 
 fn format_time(obj: &mut serde_json::map::Map<String, Value>, fields: Vec<&str>) {
     for f in fields {
-        if let Some(ts_ns) = obj.get(f).and_then(|val| val.as_u64()) {
+        if let Some(ts_ns) = obj.get(f).and_then(|val| Value::as_u64(val)) {
             let d: SystemTime = SystemTime::UNIX_EPOCH + Duration::from_nanos(ts_ns);
             let dt: DateTime<Local> = DateTime::from(d);
             obj.insert(f.to_owned(), Value::from(dt.to_rfc3339()));
@@ -794,17 +789,24 @@ fn format_time(obj: &mut serde_json::map::Map<String, Value>, fields: Vec<&str>)
 fn convert_bool(value: Option<bool>, mode: ConvertBools) -> String {
     match mode {
         ConvertBools::No => value.map_or("null".to_owned(), |v| v.to_string()),
-        ConvertBools::OneZero => value.map_or("0".to_owned(), |v| match v {
-            true => "1".to_owned(),
-            false => "0".to_owned(),
+        ConvertBools::OneZero => value.map_or("0".to_owned(), |v| {
+            if v {
+                "1".to_owned()
+            } else {
+                "0".to_owned()
+            }
         }),
-        ConvertBools::One => value.map_or(<_>::default(), |v| match v {
-            true => "1".to_owned(),
-            false => <_>::default(),
+        ConvertBools::One => value.map_or(<_>::default(), |v| {
+            if v {
+                "1".to_owned()
+            } else {
+                <_>::default()
+            }
         }),
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn main() {
     let opts: Opts = Opts::parse();
     let mut db = YedbClient::new(&opts.path);
@@ -837,30 +839,33 @@ fn main() {
             0
         }
         Cmd::Server(c) => output_result_ok(server_set_prop(&mut db, &c.prop, c.value)),
-        Cmd::Get(c) => match c.recursive {
-            true => match db.key_get_recursive(&c.key) {
-                Ok(v) => {
-                    let mut table = ctable(vec!["key", "type", "value"]);
-                    for key in v {
-                        let value = _format_debug_value(&key.1);
-                        table.add_row(row![&key.0, &key.1.type_as_str(), value]);
+        Cmd::Get(c) => {
+            if c.recursive {
+                match db.key_get_recursive(&c.key) {
+                    Ok(v) => {
+                        let mut table = ctable(vec!["key", "type", "value"]);
+                        for key in v {
+                            let value = _format_debug_value(&key.1);
+                            table.add_row(row![&key.0, &key.1.type_as_str(), value]);
+                        }
+                        table.printstd();
+                        0
                     }
-                    table.printstd();
-                    0
+                    Err(e) => {
+                        output_error(e);
+                        1
+                    }
                 }
-                Err(e) => {
-                    output_error(e);
-                    1
-                }
-            },
-            false => output_result_bool(
-                match c.key.find(':') {
-                    Some(pos) => db.key_get_field(&c.key[..pos], &c.key[pos + 1..]),
-                    None => db.key_get(&c.key),
-                },
-                c.convert_bool,
-            ),
-        },
+            } else {
+                output_result_bool(
+                    match c.key.find(':') {
+                        Some(pos) => db.key_get_field(&c.key[..pos], &c.key[pos + 1..]),
+                        None => db.key_get(&c.key),
+                    },
+                    c.convert_bool,
+                )
+            }
+        }
         Cmd::GetField(c) => output_result_bool(db.key_get_field(&c.key, &c.field), c.convert_bool),
         Cmd::Source(c) => {
             let result = match c.key.find(':') {
@@ -907,9 +912,10 @@ fn main() {
             }
         }
         Cmd::Ls(c) => {
-            let result = match c.all {
-                true => db.key_list_all(&c.key),
-                false => db.key_list(&c.key),
+            let result = if c.all {
+                db.key_list_all(&c.key)
+            } else {
+                db.key_list(&c.key)
             };
             match result {
                 Ok(v) => {
@@ -928,10 +934,13 @@ fn main() {
         }
         Cmd::Delete(c) => match c.key.find(':') {
             Some(pos) => output_result_ok(db.key_delete_field(&c.key[..pos], &c.key[pos + 1..])),
-            None => match c.recursive {
-                true => output_result_ok(db.key_delete_recursive(&c.key)),
-                false => output_result_ok(db.key_delete(&c.key)),
-            },
+            None => {
+                if c.recursive {
+                    output_result_ok(db.key_delete_recursive(&c.key))
+                } else {
+                    output_result_ok(db.key_delete(&c.key))
+                }
+            }
         },
         Cmd::Incr(c) => output_result(db.key_increment(&c.key)),
         Cmd::Decr(c) => output_result(db.key_decrement(&c.key)),
@@ -950,14 +959,12 @@ fn main() {
         },
         Cmd::Edit(c) => match db.key_get(&c.key) {
             Ok(v) => {
-                match c.default {
-                    Some(v) if v == "-" => {
+                if let Some(v) = c.default {
+                    if v == "-" {
                         let mut buffer = String::new();
                         io::stdin().read_to_string(&mut buffer).unwrap();
                     }
-                    Some(_) => {}
-                    None => {}
-                };
+                }
                 edit_key(&mut db, &c.key, Some(&v))
             }
             Err(ref e) if e.kind() == ErrorKind::KeyNotFound => {
@@ -1007,16 +1014,13 @@ fn main() {
                 for key in &keys {
                     println!("{}", format!("Key is broken: {}", key).red());
                 }
-                match keys.len() {
-                    0 => {
-                        print_ok();
-                        0
-                    }
-                    _ => {
-                        println!();
-                        println!("Run \"repair\" command to clean up and fix the database");
-                        5
-                    }
+                if keys.is_empty() {
+                    print_ok();
+                    0
+                } else {
+                    println!();
+                    println!("Run \"repair\" command to clean up and fix the database");
+                    5
                 }
             }
             Err(e) => {
@@ -1027,11 +1031,10 @@ fn main() {
         Cmd::Repair => match db.repair() {
             Ok(keys) => {
                 for key_data in keys {
-                    match key_data.1 {
-                        true => {
-                            println!("{}", format!("Key restored: {}", key_data.0).green().bold())
-                        }
-                        false => println!("{}", format!("Key removed: {}", key_data.0).red()),
+                    if key_data.1 {
+                        println!("{}", format!("Key restored: {}", key_data.0).green().bold());
+                    } else {
+                        println!("{}", format!("Key removed: {}", key_data.0).red());
                     }
                 }
                 0
@@ -1077,9 +1080,10 @@ fn main() {
             DumpCommands::View(c) => match load_dump(
                 &mut db,
                 &c.file,
-                match c.full {
-                    true => DumpLoadMode::ViewFull,
-                    false => DumpLoadMode::View,
+                if c.full {
+                    DumpLoadMode::ViewFull
+                } else {
+                    DumpLoadMode::View
                 },
             ) {
                 Ok(_) => 0,
