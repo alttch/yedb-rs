@@ -60,6 +60,7 @@ fn default_auto_bak() -> u64 {
     0
 }
 
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DBInfo {
     pub repair_recommended: bool,
@@ -100,48 +101,48 @@ pub enum ErrorKind {
 }
 
 impl ErrorKind {
-    fn convert_to_string(&self) -> String {
-        use ErrorKind::*;
+    fn convert_to_string(self) -> String {
         (match self {
-            IOError => "I/O Error",
-            DataError => "Data error",
-            TimeoutError => "Timeout error",
-            KeyNotFound => "Key not found",
-            FieldNotFound => "Field not found",
-            SchemaValidationError => "Schema validation error",
-            UnsupportedFormat => "Unsupported format",
-            UnsupportedVersion => "Unsupported version",
-            NotOpened => "Not opened",
-            Busy => "Database is busy",
-            NotInitialized => "Not initialized",
-            RequestError => "Request error",
-            ProtocolError => "Protocol error",
-            MethodNotFound => "Method not found",
-            InvalidParameter => "Invalid parameter",
-            Eof => "EOF",
-            Other => "Error",
+            ErrorKind::IOError => "I/O Error",
+            ErrorKind::DataError => "Data error",
+            ErrorKind::TimeoutError => "Timeout error",
+            ErrorKind::KeyNotFound => "Key not found",
+            ErrorKind::FieldNotFound => "Field not found",
+            ErrorKind::SchemaValidationError => "Schema validation error",
+            ErrorKind::UnsupportedFormat => "Unsupported format",
+            ErrorKind::UnsupportedVersion => "Unsupported version",
+            ErrorKind::NotOpened => "Not opened",
+            ErrorKind::Busy => "Database is busy",
+            ErrorKind::NotInitialized => "Not initialized",
+            ErrorKind::RequestError => "Request error",
+            ErrorKind::ProtocolError => "Protocol error",
+            ErrorKind::MethodNotFound => "Method not found",
+            ErrorKind::InvalidParameter => "Invalid parameter",
+            ErrorKind::Eof => "EOF",
+            ErrorKind::Other => "Error",
         })
         .to_owned()
     }
 }
 
+#[allow(clippy::unnecessary_wraps)]
 fn de_errorkind<'de, D>(deserializer: D) -> Result<ErrorKind, D::Error>
 where
     D: Deserializer<'de>,
 {
-    use ErrorKind::*;
-    Ok(match i32::deserialize(deserializer) {
-        Ok(n) => match n {
-            -32001 => KeyNotFound,
-            -32002 => DataError,
-            -32003 => SchemaValidationError,
-            -32004 => IOError,
-            -32601 => MethodNotFound,
-            -32602 => InvalidParameter,
-            -32681 => FieldNotFound,
-            _ => Other,
-        },
-        Err(_) => Other,
+    Ok(if let Ok(n) = i32::deserialize(deserializer) {
+        match n {
+            -32001 => ErrorKind::KeyNotFound,
+            -32002 => ErrorKind::DataError,
+            -32003 => ErrorKind::SchemaValidationError,
+            -32004 => ErrorKind::IOError,
+            -32601 => ErrorKind::MethodNotFound,
+            -32602 => ErrorKind::InvalidParameter,
+            -32681 => ErrorKind::FieldNotFound,
+            _ => ErrorKind::Other,
+        }
+    } else {
+        ErrorKind::Other
     })
 }
 
@@ -150,15 +151,14 @@ impl Serialize for ErrorKind {
     where
         S: Serializer,
     {
-        use ErrorKind::*;
         let code = match self {
-            KeyNotFound => -32001,
-            DataError => -32002,
-            SchemaValidationError => -32003,
-            IOError => -32004,
-            MethodNotFound => -32601,
-            InvalidParameter => -32602,
-            FieldNotFound => -32681,
+            ErrorKind::KeyNotFound => -32001,
+            ErrorKind::DataError => -32002,
+            ErrorKind::SchemaValidationError => -32003,
+            ErrorKind::IOError => -32004,
+            ErrorKind::MethodNotFound => -32601,
+            ErrorKind::InvalidParameter => -32602,
+            ErrorKind::FieldNotFound => -32681,
             _ => -32000,
         };
         serializer.serialize_i32(code)
@@ -253,15 +253,19 @@ impl JSONRpcRequest {
         self.params.insert(name.to_owned(), value);
     }
 
+    /// # Errors
+    ///
+    /// Will return errors on serialization errors
     pub fn pack(&self) -> Result<Vec<u8>, Error> {
         match rmp_serde::to_vec_named(&self) {
             Ok(v) => Ok(v),
             Err(e) => Err(Error::new(ErrorKind::RequestError, e)),
         }
     }
+
     pub fn respond<T: Serialize>(&self, result: T) -> JSONRpcResponse<T> {
         JSONRpcResponse {
-            jsonrpc: self.jsonrpc.to_owned(),
+            jsonrpc: self.jsonrpc.clone(),
             id: self.id.clone(),
             result: Some(result),
             error: None,
@@ -278,7 +282,7 @@ impl JSONRpcRequest {
 
     pub fn error(&self, err: Error) -> JSONRpcResponse<Value> {
         JSONRpcResponse {
-            jsonrpc: self.jsonrpc.to_owned(),
+            jsonrpc: self.jsonrpc.clone(),
             id: self.id.clone(),
             result: None,
             error: Some(err),

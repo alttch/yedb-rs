@@ -10,6 +10,9 @@ readme = "README.md"
 keywords = ["database", "server", "client", "key-value"]
 autoexamples = false
 
+[package.metadata.docs.rs]
+features = ["client-sync", "client-async"]
+
 [lib]
 name = "yedb"
 path = "src/lib.rs"
