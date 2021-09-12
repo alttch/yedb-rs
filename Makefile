@@ -7,7 +7,7 @@ test:
 	./target/debug/yedb-server /tmp/yedb-test-db1 --pid-file /tmp/yedb-server-test.pid -v &
 	sleep 0.1
 	#cargo test -- --test-threads=1 --nocapture
-	cargo test --features client-sync -- --nocapture
+	cargo test --features client-sync,client-async -- --nocapture
 	kill `cat /tmp/yedb-server-test.pid`
 	sleep 0.5
 	rm -rf /tmp/yedb-test-db1

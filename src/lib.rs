@@ -1129,7 +1129,7 @@ impl Database {
             fs::create_dir_all(&self.trash_path)?;
             let mut options = fs_extra::file::CopyOptions::new();
             options.overwrite = true;
-            fs_extra::file::move_file(&key_file, &trashed, &options)?;
+            let _r = fs_extra::file::move_file(&key_file, &trashed, &options);
             if !dts.contains(&key_dir) {
                 dts.push(key_dir.clone());
             }
