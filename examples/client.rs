@@ -1,5 +1,5 @@
-use yedb::YedbClient;
 use serde_json::Value;
+use yedb::YedbClient;
 
 fn main() {
     let mut db = YedbClient::new("tcp://127.0.0.1:8870");

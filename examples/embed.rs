@@ -1,5 +1,5 @@
-use yedb::Database;
 use serde_json::Value;
+use yedb::Database;
 
 fn main() {
     let mut db = Database::new();
