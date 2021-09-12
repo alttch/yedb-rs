@@ -13,8 +13,8 @@ test:
 	rm -rf /tmp/yedb-test-db1
 
 clean:
-	find . -type d -name target -exec rm -rf {} \; || exit 0
-	find . -type f -name Cargo.lock -exec rm -f {} \; || exit 0
+	rm -rf _build
+	cargo clean
 
 tag:
 	git tag -a v${VERSION} -m v${VERSION}
