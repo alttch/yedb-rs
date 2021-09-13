@@ -317,14 +317,13 @@ impl<'a> DataKey<'a> {
 
 macro_rules! get_engine {
     ($e:expr) => {
-        match $e.engine {
-            Some(x) => x,
-            None => {
-                return Err(Error::new(
-                    ErrorKind::NotOpened,
-                    "The database is not opened",
-                ))
-            }
+        if let Some(engine) = $e.engine {
+            engine
+        } else {
+            return Err(Error::new(
+                ErrorKind::NotOpened,
+                "The database is not opened",
+            ));
         }
     };
 }
