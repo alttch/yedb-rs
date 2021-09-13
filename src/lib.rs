@@ -1514,10 +1514,10 @@ impl Database {
         if self.auto_bak > 0 && !key.starts_with(".schema/") && key != ".schema" {
             for n in 1..=self.auto_bak {
                 let key_name = format!("{}.bak{}", key, n);
-                match self._delete_key(&key_name, false, false, false) {
-                    Ok(_) => {}
-                    Err(e) if e.kind() == ErrorKind::KeyNotFound => {}
-                    Err(e) => return Err(e),
+                if let Err(e) = self._delete_key(&key_name, false, false, false) {
+                    if e.kind() != ErrorKind::KeyNotFound {
+                        return Err(e);
+                    }
                 }
             }
         }
