@@ -1587,10 +1587,7 @@ impl Database {
     ///
     /// Will return Err if the key is not found and on I/O errors
     pub fn key_get(&mut self, key: &str) -> Result<Value, Error> {
-        return match self.get_key_data(DataKey::Name(key), false) {
-            Ok(v) => Ok(v.0),
-            Err(e) => Err(e),
-        };
+        Ok(self.get_key_data(DataKey::Name(key), false)?.0)
     }
 
     /// # Errors
