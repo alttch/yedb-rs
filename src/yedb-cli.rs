@@ -8,6 +8,7 @@ use std::process;
 
 use std::io::prelude::*;
 use std::io::{self, Read};
+use std::sync::{Arc, Mutex};
 
 use colored::Colorize;
 use std::time::{Duration, SystemTime};
@@ -62,7 +63,8 @@ fn benchmark(db: &mut YedbClient, nt: u32, iterations: u32) {
     let i = db.info().unwrap();
     let old_cache_size = i.cache_size;
     db.key_delete_recursive(".benchmark").unwrap();
-    db.server_set("cache_size", Value::from(iterations * 4)).unwrap();
+    db.server_set("cache_size", Value::from(iterations * 4))
+        .unwrap();
     let test_number = Value::from(777.777);
     let mut test_string = String::new();
     for _ in 0..1000 {
@@ -84,24 +86,28 @@ fn benchmark(db: &mut YedbClient, nt: u32, iterations: u32) {
             ("object", test_dict.clone()),
         ] {
             let mut handlers = Vec::new();
+            let errors = Arc::new(Mutex::new(0));
             staged_benchmark_start!(&format!("{} {}", bm_op, op.0));
             for thread_no in 0..nt {
                 let op = op.clone();
                 let op_name = op.0;
                 let op_value = op.1;
                 let db_path = db.path.clone();
+                let errs = errors.clone();
                 let t = std::thread::spawn(move || {
                     let mut session = YedbClient::new(&db_path);
                     for x in 0..(iterations / nt) {
                         let key_name = format!(".benchmark/t{}/{}_{}", thread_no, &op_name, x);
-                        match bm_op {
+                        if match bm_op {
                             BenchmarkOp::Set => {
-                                session.key_set(&key_name, op_value.clone()).unwrap();
+                                session.key_set(&key_name, op_value.clone()).is_err()
                             }
                             BenchmarkOp::Get | BenchmarkOp::GetCached => {
-                                session.key_get(&key_name).unwrap();
+                                session.key_get(&key_name).is_err()
                             }
-                        };
+                        } {
+                            *errs.lock().unwrap() += 1;
+                        }
                     }
                 });
                 handlers.push(t);
@@ -109,21 +115,25 @@ fn benchmark(db: &mut YedbClient, nt: u32, iterations: u32) {
             for h in handlers {
                 h.join().unwrap();
             }
-            staged_benchmark_finish_current!(iterations);
+            staged_benchmark_finish_current!(iterations, *errors.lock().unwrap());
         }
         if bm_op == BenchmarkOp::Set {
             db.purge_cache().unwrap();
         }
     }
     let mut handlers = Vec::new();
+    let errors = Arc::new(Mutex::new(0));
     staged_benchmark_start!("key_increment");
     for thread_no in 0..nt {
         let db_path = db.path.clone();
+        let errs = errors.clone();
         let t = std::thread::spawn(move || {
             let mut session = YedbClient::new(&db_path);
             let key_name = format!(".benchmark/incr/increment_{}", thread_no);
             for _ in 0..(iterations / nt) {
-                session.key_increment(&key_name).unwrap();
+                if session.key_increment(&key_name).is_err() {
+                    *errs.lock().unwrap() += 1;
+                }
             }
         });
         handlers.push(t);
@@ -131,7 +141,7 @@ fn benchmark(db: &mut YedbClient, nt: u32, iterations: u32) {
     for h in handlers {
         h.join().unwrap();
     }
-    staged_benchmark_finish_current!(iterations);
+    staged_benchmark_finish_current!(iterations, *errors.lock().unwrap());
     println!("Cleaning up...");
     db.key_delete_recursive(".benchmark").unwrap();
     db.purge().unwrap();
