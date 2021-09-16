@@ -2,11 +2,31 @@ use rmp_serde;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
+use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use std::collections::HashMap;
 use std::convert::TryInto;
 
 use log::{debug, error};
+
+const ERR_CODE_KEY_NOT_FOUND: i16 = -32001;
+const ERR_CODE_DATA: i16 = -32002;
+const ERR_CODE_SCHEMA_VALIDATION: i16 = -32003;
+const ERR_CODE_IO: i16 = -32004;
+const ERR_CODE_FIELD_NOT_FOUND: i16 = -32005;
+const ERR_CODE_TIMEOUT: i16 = -32006;
+const ERR_CODE_UNSUPPORTED_FORMAT: i16 = -32007;
+const ERR_CODE_UNSUPPORTED_VERSION: i16 = -32008;
+const ERR_CODE_NOT_OPENED: i16 = -32009;
+const ERR_CODE_BUSY: i16 = -32010;
+const ERR_CODE_NOT_INITIALIZED: i16 = -32011;
+const ERR_CODE_PROTO: i16 = -32012;
+const ERR_CODE_EOF: i16 = -32013;
+
+const ERR_CODE_REQUEST: i16 = -32600;
+const ERR_CODE_METHOD_NOT_FOUND: i16 = -32601;
+const ERR_CODE_INVALID_PARAMS: i16 = -32602;
+const ERR_CODE_OTHER: i16 = -32603;
 
 fn se_checksum<S>(checksum: &Option<[u8; 32]>, s: S) -> Result<S::Ok, S::Error>
 where
@@ -46,7 +66,7 @@ pub struct KeyExplained {
     pub value: Value,
     pub schema: Option<String>,
     pub len: Option<u64>,
-    #[serde(rename(serialize = "type", deserialize = "type"))]
+    #[serde(rename = "type")]
     pub tp: String,
     pub mtime: u64,
     pub size: u64,
@@ -79,110 +99,74 @@ pub struct DBInfo {
     pub version: u8,
 }
 
-#[derive(Eq, PartialEq, Copy, Clone)]
+#[derive(Serialize_repr, Deserialize_repr, PartialEq, Copy, Clone, Debug)]
+#[repr(i16)]
 pub enum ErrorKind {
-    IOError,
-    DataError,
-    TimeoutError,
-    KeyNotFound,
-    FieldNotFound,
-    SchemaValidationError,
-    UnsupportedFormat,
-    UnsupportedVersion,
-    NotOpened,
-    Busy,
-    NotInitialized,
-    RequestError,
-    ProtocolError,
-    MethodNotFound,
-    InvalidParameter,
-    Other,
-    Eof,
-}
-
-impl ErrorKind {
-    fn convert_to_string(self) -> String {
-        (match self {
-            ErrorKind::IOError => "I/O Error",
-            ErrorKind::DataError => "Data error",
-            ErrorKind::TimeoutError => "Timeout error",
-            ErrorKind::KeyNotFound => "Key not found",
-            ErrorKind::FieldNotFound => "Field not found",
-            ErrorKind::SchemaValidationError => "Schema validation error",
-            ErrorKind::UnsupportedFormat => "Unsupported format",
-            ErrorKind::UnsupportedVersion => "Unsupported version",
-            ErrorKind::NotOpened => "Not opened",
-            ErrorKind::Busy => "Database is busy",
-            ErrorKind::NotInitialized => "Not initialized",
-            ErrorKind::RequestError => "Request error",
-            ErrorKind::ProtocolError => "Protocol error",
-            ErrorKind::MethodNotFound => "Method not found",
-            ErrorKind::InvalidParameter => "Invalid parameter",
-            ErrorKind::Eof => "EOF",
-            ErrorKind::Other => "Error",
-        })
-        .to_owned()
-    }
-}
-
-#[allow(clippy::unnecessary_wraps)]
-fn de_errorkind<'de, D>(deserializer: D) -> Result<ErrorKind, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    Ok(if let Ok(n) = i32::deserialize(deserializer) {
-        match n {
-            -32001 => ErrorKind::KeyNotFound,
-            -32002 => ErrorKind::DataError,
-            -32003 => ErrorKind::SchemaValidationError,
-            -32004 => ErrorKind::IOError,
-            -32601 => ErrorKind::MethodNotFound,
-            -32602 => ErrorKind::InvalidParameter,
-            -32681 => ErrorKind::FieldNotFound,
-            _ => ErrorKind::Other,
-        }
-    } else {
-        ErrorKind::Other
-    })
-}
-
-impl Serialize for ErrorKind {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let code = match self {
-            ErrorKind::KeyNotFound => -32001,
-            ErrorKind::DataError => -32002,
-            ErrorKind::SchemaValidationError => -32003,
-            ErrorKind::IOError => -32004,
-            ErrorKind::MethodNotFound => -32601,
-            ErrorKind::InvalidParameter => -32602,
-            ErrorKind::FieldNotFound => -32681,
-            _ => -32000,
-        };
-        serializer.serialize_i32(code)
-    }
+    IOError = ERR_CODE_IO,
+    DataError = ERR_CODE_DATA,
+    TimeoutError = ERR_CODE_TIMEOUT,
+    KeyNotFound = ERR_CODE_KEY_NOT_FOUND,
+    FieldNotFound = ERR_CODE_FIELD_NOT_FOUND,
+    SchemaValidationError = ERR_CODE_SCHEMA_VALIDATION,
+    UnsupportedFormat = ERR_CODE_UNSUPPORTED_FORMAT,
+    UnsupportedVersion = ERR_CODE_UNSUPPORTED_VERSION,
+    NotOpened = ERR_CODE_NOT_OPENED,
+    Busy = ERR_CODE_BUSY,
+    NotInitialized = ERR_CODE_NOT_INITIALIZED,
+    RequestError = ERR_CODE_REQUEST,
+    ProtocolError = ERR_CODE_PROTO,
+    Eof = ERR_CODE_EOF,
+    MethodNotFound = ERR_CODE_METHOD_NOT_FOUND,
+    InvalidParameter = ERR_CODE_INVALID_PARAMS,
+    Other = ERR_CODE_OTHER,
 }
 
 impl std::fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.convert_to_string())
+        write!(
+            f,
+            "{}",
+            match self {
+                ErrorKind::IOError => "I/O Error",
+                ErrorKind::DataError => "Data error",
+                ErrorKind::TimeoutError => "Timeout error",
+                ErrorKind::KeyNotFound => "Key not found",
+                ErrorKind::FieldNotFound => "Field not found",
+                ErrorKind::SchemaValidationError => "Schema validation error",
+                ErrorKind::UnsupportedFormat => "Unsupported format",
+                ErrorKind::UnsupportedVersion => "Unsupported version",
+                ErrorKind::NotOpened => "Not opened",
+                ErrorKind::Busy => "Database is busy",
+                ErrorKind::NotInitialized => "Not initialized",
+                ErrorKind::RequestError => "Request error",
+                ErrorKind::ProtocolError => "Protocol error",
+                ErrorKind::MethodNotFound => "Method not found",
+                ErrorKind::InvalidParameter => "Invalid parameter",
+                ErrorKind::Eof => "EOF",
+                ErrorKind::Other => "Error",
+            }
+        )
     }
 }
 
-impl std::fmt::Debug for ErrorKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.convert_to_string())
+impl Default for ErrorKind {
+    fn default() -> Self {
+        ErrorKind::Other
     }
+}
+
+fn ok_or_default<'de, T, D>(deserializer: D) -> Result<T, D::Error>
+where
+    T: Deserialize<'de> + Default,
+    D: Deserializer<'de>,
+{
+    let v: Value = Deserialize::deserialize(deserializer)?;
+    Ok(T::deserialize(v).unwrap_or_default())
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Error {
-    #[serde(
-        rename(serialize = "code", deserialize = "code"),
-        deserialize_with = "de_errorkind"
-    )]
+    #[serde(rename = "code", deserialize_with = "ok_or_default")]
     error_kind: ErrorKind,
     message: String,
 }
