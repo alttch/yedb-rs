@@ -233,7 +233,7 @@ use log::{debug, error, warn};
 extern crate lazy_static;
 
 pub const SERVER_ID: &str = "yedb-altt-rs";
-pub const VERSION: &str = "0.2.0";
+pub const VERSION: &str = "0.2.1";
 pub const ENGINE_VERSION: u8 = 1;
 
 pub const DEFAULT_CACHE_SIZE: usize = 1000;
