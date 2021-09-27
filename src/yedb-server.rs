@@ -271,7 +271,9 @@ async fn run_server(bind_to: &str, pidfile: &str) {
     let dbinfo = dbobj.info().unwrap();
     debug!("Library: {}, version {}", dbinfo.server.0, dbinfo.server.1);
     debug!("Database: {}, format: {}", dbinfo.path, dbinfo.fmt);
-    tokio::spawn(async move { handle_term!(signal(SignalKind::interrupt()).unwrap()) });
+    if std::env::var("YEDB_DISABLE_CC").unwrap_or_else(|_| "0".to_owned()) != "1" {
+        tokio::spawn(async move { handle_term!(signal(SignalKind::interrupt()).unwrap()) });
+    }
     tokio::spawn(async move { handle_term!(signal(SignalKind::terminate()).unwrap()) });
     {
         let mut f = fs::File::create(&pidfile).await.unwrap();
