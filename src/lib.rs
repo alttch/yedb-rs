@@ -648,7 +648,10 @@ pub struct Database {
     pub write_modified_only: bool,
     pub timeout: Duration,
     pub lock_ex: bool,
+    // auto-backup keys
     pub auto_bak: u64,
+    // do not backup the following keys (and their subkeys)
+    pub skip_bak: Vec<String>,
     pub strict_schema: bool,
     default_fmt: SerializationEngine,
     default_checksums: bool,
@@ -684,6 +687,7 @@ impl Database {
             auto_repair: true,
             auto_flush: true,
             auto_bak: 0,
+            skip_bak: Vec::new(),
             strict_schema: false,
             lock_ex: true,
             write_modified_only: true,
@@ -700,6 +704,23 @@ impl Database {
 
     pub fn is_open(&self) -> bool {
         self.engine.is_some()
+    }
+
+    fn need_skip_bak(&self, key: &str) -> bool {
+        for k in &self.skip_bak {
+            let l = k.len();
+            if k == key || (key.starts_with(k) && key.get(l..l + 1).map_or(false, |s| s == "/")) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn need_backup(&self, key: &str) -> bool {
+        self.auto_bak > 0
+            && !key.starts_with(".schema/")
+            && key != ".schema"
+            && !self.need_skip_bak(key)
     }
 
     /// # Errors
@@ -1510,7 +1531,7 @@ impl Database {
     ///
     /// Will return Err on I/O errors
     pub fn key_delete(&mut self, key: &str) -> Result<(), Error> {
-        if self.auto_bak > 0 && !key.starts_with(".schema/") && key != ".schema" {
+        if self.need_backup(key) {
             for n in 1..=self.auto_bak {
                 let key_name = format!("{}.bak{}", key, n);
                 if let Err(e) = self._delete_key(&key_name, false, false, false) {
@@ -1746,7 +1767,7 @@ impl Database {
     /// Will return Err on I/O or serialization errors
     pub fn key_set(&mut self, key: &str, value: Value) -> Result<(), Error> {
         self.validate_schema(key, &value)?;
-        if self.auto_bak > 0 && !key.starts_with(".schema/") && key != "schema" {
+        if self.need_backup(key) {
             for n in (1..=self.auto_bak).rev() {
                 let key_from = if n == 1 {
                     key.to_owned()

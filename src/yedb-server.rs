@@ -7,7 +7,6 @@ use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::RwLock;
 
 use std::fmt;
-use std::vec::Vec;
 
 use yedb::common::JSONRpcRequest;
 use yedb::{Database, Error, ErrorKind};
@@ -154,6 +153,8 @@ struct Opts {
     cache_size: usize,
     #[clap(long, default_value = "0")]
     auto_bak: u64,
+    #[clap(long)]
+    skip_bak: Option<String>,
     #[clap(long, default_value = "2")]
     workers: usize,
 }
@@ -246,6 +247,11 @@ fn main() {
         dbobj.set_cache_size(opts.cache_size);
         debug!("Auto bak: {}", opts.auto_bak);
         dbobj.auto_bak = opts.auto_bak as u64;
+        if let Some(ref skip_bak) = opts.skip_bak {
+            let skips = skip_bak.split(',').map(ToOwned::to_owned).collect();
+            dbobj.skip_bak = skips;
+            debug!("Skip bak: {}", dbobj.skip_bak.join(", "));
+        }
         debug!("Workers: {}", opts.workers);
         drop(dbobj);
         run_server(&opts.bind, &opts.pid_file).await;
