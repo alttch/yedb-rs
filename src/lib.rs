@@ -1068,7 +1068,7 @@ impl Database {
         debug!("Purging cache for {}*", key);
         let to_remove: Vec<_> = self
             .cache
-            .iter_mut()
+            .iter()
             .filter(|&(k, _)| k.starts_with(&key))
             .map(|(k, _)| k.clone())
             .collect();
