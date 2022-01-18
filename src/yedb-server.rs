@@ -9,9 +9,8 @@ use tokio::sync::RwLock;
 use std::fmt;
 
 use yedb::common::JSONRpcRequest;
-use yedb::{Database, Error, ErrorKind};
-
-use serde_json::Value;
+use yedb::{Error, ErrorKind};
+use yedb::server::{YedbServerErrorKind, process_request, DBCELL};
 
 use log::LevelFilter;
 use syslog::{BasicLogger, Facility, Formatter3164};
@@ -23,42 +22,7 @@ use clap::Clap;
 
 use log::{debug, error, info, Level, Metadata, Record};
 
-lazy_static! {
-    pub static ref DBCELL: RwLock<Database> = RwLock::new(yedb::Database::new());
-}
-
 struct SimpleLogger;
-
-#[derive(Debug, Eq, PartialEq)]
-pub enum YedbServerErrorKind {
-    Critical,
-    #[allow(dead_code)]
-    Other,
-}
-
-#[macro_export]
-macro_rules! parse_jsonrpc_request_param {
-    ($r:expr, $k:expr, $p:path) => {
-        if let Some($p(v)) = $r.params.get($k) {
-            Some(v)
-        } else {
-            None
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! encode_jsonrpc_response {
-    ($v:expr) => {
-        match rmp_serde::to_vec_named(&$v) {
-            Ok(v) => v,
-            Err(e) => {
-                error!("Response encode error {}", e);
-                return Err(YedbServerErrorKind::Critical);
-            }
-        }
-    };
-}
 
 impl log::Log for SimpleLogger {
     fn enabled(&self, metadata: &Metadata) -> bool {
@@ -339,22 +303,42 @@ macro_rules! parse_request_meta {
 macro_rules! handle_request {
     ($s:expr, $b:expr) => {
         match $s.read_exact(&mut $b).await {
-            Ok(_) => match process_request(&$b).await {
-                Ok(response_buf) => {
-                    let mut response_frame = vec![yedb::ENGINE_VERSION, 2_u8];
-                    response_frame.extend(&(response_buf.len() as u32).to_le_bytes());
-                    response_frame.extend(&response_buf);
-                    match $s.write_all(&response_frame).await {
-                        Ok(_) => {}
-                        Err(e) => {
-                            debug!("API write error {}", e);
-                            break;
-                        }
-                    };
+            Ok(_) => {
+                let request: JSONRpcRequest = match rmp_serde::from_read_ref(&$b) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        error!("API decode error {}", e);
+                        break;
+                    }
+                };
+                if !request.is_valid() {
+                    error!("API error: invalid request");
+                    break;
                 }
-                Err(e) if e == YedbServerErrorKind::Critical => break,
-                Err(_) => continue,
-            },
+                match process_request(request).await {
+                    Ok(response) => {
+                        let response_buf = match rmp_serde::to_vec_named(&response) {
+                            Ok(v) => v,
+                            Err(e) => {
+                                error!("Response encode error {}", e);
+                                break;
+                            }
+                        };
+                        let mut response_frame = vec![yedb::ENGINE_VERSION, 2_u8];
+                        response_frame.extend(&(response_buf.len() as u32).to_le_bytes());
+                        response_frame.extend(&response_buf);
+                        match $s.write_all(&response_frame).await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                debug!("API write error {}", e);
+                                break;
+                            }
+                        };
+                    }
+                    Err(e) if e == YedbServerErrorKind::Critical => break,
+                    Err(_) => continue,
+                }
+            }
             Err(e) => {
                 error!("Socket error {}", e);
                 break;
@@ -383,249 +367,4 @@ async fn tcp_worker(stream: &mut TcpStream) {
 
         handle_request!(stream, buf);
     }
-}
-
-#[allow(clippy::too_many_lines)]
-async fn process_request(buf: &[u8]) -> Result<Vec<u8>, YedbServerErrorKind> {
-    let request: JSONRpcRequest = match rmp_serde::from_read_ref(&buf) {
-        Ok(v) => v,
-        Err(e) => {
-            error!("API decode error {}", e);
-            return Err(YedbServerErrorKind::Critical);
-        }
-    };
-    if !request.is_valid() {
-        error!("API error: invalid request");
-        return Err(YedbServerErrorKind::Critical);
-    }
-    macro_rules! invalid_param {
-        () => {
-            encode_jsonrpc_response!(request.error(Error::err_invalid_parameter()))
-        };
-    }
-    macro_rules! run_request {
-        ($params: expr, $then: block) => {
-            if request.params_valid($params)
-                $then
-            else {
-                invalid_param!()
-            }
-        }
-    }
-    macro_rules! respond {
-        ($result: expr) => {
-            match $result {
-                Ok(v) => encode_jsonrpc_response!(request.respond(v)),
-                Err(e) => encode_jsonrpc_response!(request.error(e)),
-            }
-        };
-    }
-    Ok(match request.method.as_str() {
-        "test" => {
-            debug!("API request: test");
-            run_request!(vec![], {
-                encode_jsonrpc_response!(request.respond(yedb::ServerInfo::new()))
-            })
-        }
-        "info" => {
-            debug!("API request: info");
-            run_request!(vec![], { respond!(DBCELL.write().await.info()) })
-        }
-        "server_set" => run_request!(vec!["name", "value"], {
-            match parse_jsonrpc_request_param!(request, "name", Value::String) {
-                Some(name) => {
-                    let value = request.params.get("value").unwrap();
-                    debug!("API request: server_set {}={}", name, value);
-                    respond!(DBCELL.write().await.server_set(name, value.clone()))
-                }
-                None => invalid_param!(),
-            }
-        }),
-        "key_get" => run_request!(vec!["key"], {
-            match parse_jsonrpc_request_param!(request, "key", Value::String) {
-                Some(v) => {
-                    debug!("API request: key_get {}", v);
-                    respond!(DBCELL.write().await.key_get(v))
-                }
-                None => invalid_param!(),
-            }
-        }),
-        "key_get_field" => run_request!(vec!["key", "field"], {
-            let key = parse_jsonrpc_request_param!(request, "key", Value::String);
-            let field = parse_jsonrpc_request_param!(request, "field", Value::String);
-            if key.is_some() && field.is_some() {
-                let k = key.unwrap();
-                let f = field.unwrap();
-                debug!("API request: key_get_field {}:{}", k, f);
-                respond!(DBCELL.write().await.key_get_field(k, f))
-            } else {
-                invalid_param!()
-            }
-        }),
-        "key_get_recursive" => run_request!(vec!["key"], {
-            match parse_jsonrpc_request_param!(request, "key", Value::String) {
-                Some(v) => {
-                    debug!("API request: key_get_recursive {}", v);
-                    respond!(DBCELL.write().await.key_get_recursive(v))
-                }
-                None => invalid_param!(),
-            }
-        }),
-        "key_explain" => run_request!(vec!["key"], {
-            match parse_jsonrpc_request_param!(request, "key", Value::String) {
-                Some(v) => {
-                    debug!("API request: key_explain {}", v);
-                    respond!(DBCELL.write().await.key_explain(v))
-                }
-                None => invalid_param!(),
-            }
-        }),
-        "key_list" => run_request!(vec!["key"], {
-            match parse_jsonrpc_request_param!(request, "key", Value::String) {
-                Some(v) => {
-                    debug!("API request: key_list {}", v);
-                    respond!(DBCELL.write().await.key_list(v))
-                }
-                None => invalid_param!(),
-            }
-        }),
-        "key_list_all" => run_request!(vec!["key"], {
-            match parse_jsonrpc_request_param!(request, "key", Value::String) {
-                Some(v) => {
-                    debug!("API request: key_list_all {}", v);
-                    respond!(DBCELL.write().await.key_list_all(v))
-                }
-                None => invalid_param!(),
-            }
-        }),
-        "key_set" => run_request!(vec!["key", "value"], {
-            let key = parse_jsonrpc_request_param!(request, "key", Value::String);
-            let value = request.params.get("value").cloned();
-            if key.is_some() && value.is_some() {
-                let k = key.unwrap();
-                debug!("API request: key_set {}", k);
-                respond!(DBCELL.write().await.key_set(k, value.unwrap()))
-            } else {
-                invalid_param!()
-            }
-        }),
-        "key_set_field" => run_request!(vec!["key", "field", "value"], {
-            let key = parse_jsonrpc_request_param!(request, "key", Value::String);
-            let field = parse_jsonrpc_request_param!(request, "field", Value::String);
-            let value = request.params.get("value").cloned();
-            if key.is_some() && field.is_some() && value.is_some() {
-                let k = key.unwrap();
-                let f = field.unwrap();
-                debug!("API request: key_set_field {}:{}", k, f);
-                respond!(DBCELL.write().await.key_set_field(k, f, value.unwrap()))
-            } else {
-                invalid_param!()
-            }
-        }),
-        "key_delete_field" => run_request!(vec!["key", "field"], {
-            let key = parse_jsonrpc_request_param!(request, "key", Value::String);
-            let field = parse_jsonrpc_request_param!(request, "field", Value::String);
-            if key.is_some() && field.is_some() {
-                let k = key.unwrap();
-                let f = field.unwrap();
-                debug!("API request: key_delete_field {}:{}", k, f);
-                respond!(DBCELL.write().await.key_delete_field(k, f))
-            } else {
-                invalid_param!()
-            }
-        }),
-        "key_increment" => run_request!(vec!["key"], {
-            if let Some(v) = parse_jsonrpc_request_param!(request, "key", Value::String) {
-                debug!("API request: key_get {}", v);
-                respond!(DBCELL.write().await.key_increment(v))
-            } else {
-                invalid_param!()
-            }
-        }),
-        "key_decrement" => run_request!(vec!["key"], {
-            if let Some(v) = parse_jsonrpc_request_param!(request, "key", Value::String) {
-                debug!("API request: key_get {}", v);
-                respond!(DBCELL.write().await.key_decrement(v))
-            } else {
-                invalid_param!()
-            }
-        }),
-        "key_copy" => run_request!(vec!["key", "dst_key"], {
-            let key = parse_jsonrpc_request_param!(request, "key", Value::String);
-            let dst_key = parse_jsonrpc_request_param!(request, "dst_key", Value::String);
-            if key.is_some() && dst_key.is_some() {
-                let k = key.unwrap();
-                let dk = dst_key.unwrap();
-                debug!("API request: key_copy {} -> {}", k, dk);
-                respond!(DBCELL.write().await.key_copy(k, dk))
-            } else {
-                invalid_param!()
-            }
-        }),
-        "key_rename" => run_request!(vec!["key", "dst_key"], {
-            let key = parse_jsonrpc_request_param!(request, "key", Value::String);
-            let dst_key = parse_jsonrpc_request_param!(request, "dst_key", Value::String);
-            if key.is_some() && dst_key.is_some() {
-                let k = key.unwrap();
-                let dk = dst_key.unwrap();
-                debug!("API request: key_rename {} -> {}", k, dk);
-                respond!(DBCELL.write().await.key_rename(k, dk))
-            } else {
-                invalid_param!()
-            }
-        }),
-        "key_delete" => run_request!(vec!["key"], {
-            if let Some(v) = parse_jsonrpc_request_param!(request, "key", Value::String) {
-                debug!("API request: key_delete {}", v);
-                respond!(DBCELL.write().await.key_delete(v))
-            } else {
-                invalid_param!()
-            }
-        }),
-        "key_delete_recursive" => run_request!(vec!["key"], {
-            if let Some(v) = parse_jsonrpc_request_param!(request, "key", Value::String) {
-                debug!("API request: key_delete_recursive {}", v);
-                respond!(DBCELL.write().await.key_delete_recursive(v))
-            } else {
-                invalid_param!()
-            }
-        }),
-        "check" => {
-            debug!("API request: check");
-            run_request!(vec![], { respond!(DBCELL.write().await.check()) })
-        }
-        "repair" => {
-            debug!("API request: repair");
-            run_request!(vec![], { respond!(DBCELL.write().await.repair()) })
-        }
-        "purge" => {
-            debug!("API request: purge");
-            run_request!(vec![], { respond!(DBCELL.write().await.purge()) })
-        }
-        "purge_cache" => {
-            debug!("API request: purge_cache");
-            run_request!(vec![], { respond!(DBCELL.write().await.purge_cache()) })
-        }
-        "safe_purge" => {
-            debug!("API request: safe_purge");
-            run_request!(vec![], { respond!(DBCELL.write().await.safe_purge()) })
-        }
-        "key_dump" => run_request!(vec!["key"], {
-            if let Some(v) = parse_jsonrpc_request_param!(request, "key", Value::String) {
-                debug!("API request: key_dump {}", v);
-                respond!(DBCELL.write().await.key_dump(v))
-            } else {
-                invalid_param!()
-            }
-        }),
-        "key_load" => run_request!(vec!["data"], {
-            if let Some(v) = parse_jsonrpc_request_param!(request, "data", Value::Array) {
-                debug!("API request: key_load");
-                respond!(DBCELL.write().await.key_load_from_serialized(v))
-            } else {
-                invalid_param!()
-            }
-        }),
-        _ => encode_jsonrpc_response!(request.error(Error::err_method_not_found())),
-    })
 }

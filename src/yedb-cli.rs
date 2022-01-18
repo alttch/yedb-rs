@@ -450,7 +450,7 @@ fn output_result_bool(result: Result<Value, Error>, mode: ConvertBools) -> i32 {
 }
 
 fn print_ok() {
-    println!("{}", format!("{}", "OK".green().bold()));
+    println!("{}", "OK".green().bold());
 }
 
 fn output_result_ok(result: Result<(), Error>) -> i32 {
@@ -773,7 +773,7 @@ fn load_dump(db: &mut YedbClient, file_name: &str, mode: DumpLoadMode) -> Result
 
 fn format_time(obj: &mut serde_json::map::Map<String, Value>, fields: Vec<&str>) {
     for f in fields {
-        if let Some(ts_ns) = obj.get(f).and_then(|val| Value::as_u64(val)) {
+        if let Some(ts_ns) = obj.get(f).and_then(Value::as_u64) {
             let d: SystemTime = SystemTime::UNIX_EPOCH + Duration::from_nanos(ts_ns);
             let dt: DateTime<Local> = DateTime::from(d);
             obj.insert(f.to_owned(), Value::from(dt.to_rfc3339()));
@@ -819,8 +819,8 @@ fn main() {
         Cmd::Info => match db.info() {
             Ok(db_info) => {
                 let mut r = serde_json::to_value(db_info).unwrap();
-                let mut o = r.as_object_mut().unwrap();
-                format_time(&mut o, vec!["created"]);
+                let o = r.as_object_mut().unwrap();
+                format_time(o, vec!["created"]);
                 display_obj(o);
                 0
             }
@@ -942,8 +942,8 @@ fn main() {
         Cmd::Explain(c) => match db.key_explain(&c.key) {
             Ok(key_info) => {
                 let mut r = serde_json::to_value(key_info).unwrap();
-                let mut o = r.as_object_mut().unwrap();
-                format_time(&mut o, vec!["mtime", "stime"]);
+                let o = r.as_object_mut().unwrap();
+                format_time(o, vec!["mtime", "stime"]);
                 display_obj(o);
                 0
             }

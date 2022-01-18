@@ -288,6 +288,10 @@ pub use client_async::YedbClientAsync;
 #[cfg(feature = "client-async")]
 pub use client_async::YedbClientPoolAsync;
 
+#[cfg(feature = "server")]
+#[path = "server.rs"]
+pub mod server;
+
 #[derive(Debug)]
 enum DataKey<'a> {
     Name(&'a str),
@@ -709,7 +713,7 @@ impl Database {
     fn need_skip_bak(&self, key: &str) -> bool {
         for k in &self.skip_bak {
             let l = k.len();
-            if k == key || (key.starts_with(k) && key.get(l..l + 1).map_or(false, |s| s == "/")) {
+            if k == key || (key.starts_with(k) && key.get(l..=l).map_or(false, |s| s == "/")) {
                 return true;
             }
         }
@@ -1462,7 +1466,7 @@ impl Database {
                 return Err(Error::new(
                     ErrorKind::DataError,
                     format!("Invalid server option value {}={}", $n, $value),
-                ));
+                ))
             };
         }
         match name {
