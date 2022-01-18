@@ -12,7 +12,7 @@ use elbus::rpc::{RpcError, RpcEvent, RpcHandlers, RpcResult};
 use elbus::Frame;
 
 #[cfg(feature = "elbus-rpc")]
-struct ElbusApi {}
+pub struct ElbusApi {}
 
 #[cfg(feature = "elbus-rpc")]
 #[async_trait::async_trait]

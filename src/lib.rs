@@ -542,7 +542,7 @@ impl Engine {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct ServerInfo {
     pub name: String,
     pub version: u8,
