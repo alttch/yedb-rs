@@ -3,7 +3,10 @@ use crate::Database;
 use crate::Error;
 use log::trace;
 use serde_json::{json, Value};
+#[cfg(feature = "elbus-rpc")]
 use std::collections::HashMap;
+#[cfg(feature = "elbus-rpc")]
+use std::sync::Arc;
 use tokio::sync::RwLock;
 
 #[cfg(feature = "elbus-rpc")]
@@ -12,7 +15,16 @@ use elbus::rpc::{RpcError, RpcEvent, RpcHandlers, RpcResult};
 use elbus::Frame;
 
 #[cfg(feature = "elbus-rpc")]
-pub struct ElbusApi {}
+pub struct ElbusApi {
+    db: Arc<RwLock<Database>>,
+}
+
+#[cfg(feature = "elbus-rpc")]
+impl ElbusApi {
+    pub fn new(db: Arc<RwLock<Database>>) -> Self {
+        Self { db }
+    }
+}
 
 #[cfg(feature = "elbus-rpc")]
 #[async_trait::async_trait]
@@ -29,7 +41,7 @@ impl RpcHandlers for ElbusApi {
         };
         let id = event.id();
         let request = JSONRpcRequest::with_params(id.into(), method, params);
-        match process_request(request).await {
+        match process_request(&self.db, request).await {
             Ok(v) => {
                 if id != 0 {
                     if let Some(e) = v.error {
@@ -49,10 +61,6 @@ impl RpcHandlers for ElbusApi {
             Err(_) => Err(RpcError::internal(None)),
         }
     }
-}
-
-lazy_static! {
-    pub static ref DBCELL: RwLock<Database> = RwLock::new(Database::new());
 }
 
 #[macro_export]
@@ -78,6 +86,7 @@ pub enum YedbServerErrorKind {
 /// Should not panic
 #[allow(clippy::too_many_lines)]
 pub async fn process_request(
+    db: &RwLock<Database>,
     request: JSONRpcRequest,
 ) -> Result<JSONRpcResponse<Value>, YedbServerErrorKind> {
     macro_rules! invalid_param {
@@ -109,14 +118,14 @@ pub async fn process_request(
         }
         "info" => {
             trace!("API request: info");
-            run_request!(vec![], { respond!(DBCELL.write().await.info()) })
+            run_request!(vec![], { respond!(db.write().await.info()) })
         }
         "server_set" => run_request!(vec!["name", "value"], {
             match parse_jsonrpc_request_param!(request, "name", Value::String) {
                 Some(name) => {
                     let value = request.params.get("value").unwrap();
                     trace!("API request: server_set {}={}", name, value);
-                    respond!(DBCELL.write().await.server_set(name, value.clone()))
+                    respond!(db.write().await.server_set(name, value.clone()))
                 }
                 None => invalid_param!(),
             }
@@ -125,7 +134,7 @@ pub async fn process_request(
             match parse_jsonrpc_request_param!(request, "key", Value::String) {
                 Some(v) => {
                     trace!("API request: key_get {}", v);
-                    respond!(DBCELL.write().await.key_get(v))
+                    respond!(db.write().await.key_get(v))
                 }
                 None => invalid_param!(),
             }
@@ -137,7 +146,7 @@ pub async fn process_request(
                 let k = key.unwrap();
                 let f = field.unwrap();
                 trace!("API request: key_get_field {}:{}", k, f);
-                respond!(DBCELL.write().await.key_get_field(k, f))
+                respond!(db.write().await.key_get_field(k, f))
             } else {
                 invalid_param!()
             }
@@ -146,7 +155,7 @@ pub async fn process_request(
             match parse_jsonrpc_request_param!(request, "key", Value::String) {
                 Some(v) => {
                     trace!("API request: key_get_recursive {}", v);
-                    respond!(DBCELL.write().await.key_get_recursive(v))
+                    respond!(db.write().await.key_get_recursive(v))
                 }
                 None => invalid_param!(),
             }
@@ -155,7 +164,7 @@ pub async fn process_request(
             match parse_jsonrpc_request_param!(request, "key", Value::String) {
                 Some(v) => {
                     trace!("API request: key_explain {}", v);
-                    respond!(DBCELL.write().await.key_explain(v))
+                    respond!(db.write().await.key_explain(v))
                 }
                 None => invalid_param!(),
             }
@@ -164,7 +173,7 @@ pub async fn process_request(
             match parse_jsonrpc_request_param!(request, "key", Value::String) {
                 Some(v) => {
                     trace!("API request: key_list {}", v);
-                    respond!(DBCELL.write().await.key_list(v))
+                    respond!(db.write().await.key_list(v))
                 }
                 None => invalid_param!(),
             }
@@ -173,7 +182,7 @@ pub async fn process_request(
             match parse_jsonrpc_request_param!(request, "key", Value::String) {
                 Some(v) => {
                     trace!("API request: key_list_all {}", v);
-                    respond!(DBCELL.write().await.key_list_all(v))
+                    respond!(db.write().await.key_list_all(v))
                 }
                 None => invalid_param!(),
             }
@@ -184,7 +193,7 @@ pub async fn process_request(
             if key.is_some() && value.is_some() {
                 let k = key.unwrap();
                 trace!("API request: key_set {}", k);
-                respond!(DBCELL.write().await.key_set(k, value.unwrap()))
+                respond!(db.write().await.key_set(k, value.unwrap()))
             } else {
                 invalid_param!()
             }
@@ -197,7 +206,7 @@ pub async fn process_request(
                 let k = key.unwrap();
                 let f = field.unwrap();
                 trace!("API request: key_set_field {}:{}", k, f);
-                respond!(DBCELL.write().await.key_set_field(k, f, value.unwrap()))
+                respond!(db.write().await.key_set_field(k, f, value.unwrap()))
             } else {
                 invalid_param!()
             }
@@ -209,7 +218,7 @@ pub async fn process_request(
                 let k = key.unwrap();
                 let f = field.unwrap();
                 trace!("API request: key_delete_field {}:{}", k, f);
-                respond!(DBCELL.write().await.key_delete_field(k, f))
+                respond!(db.write().await.key_delete_field(k, f))
             } else {
                 invalid_param!()
             }
@@ -217,7 +226,7 @@ pub async fn process_request(
         "key_increment" => run_request!(vec!["key"], {
             if let Some(v) = parse_jsonrpc_request_param!(request, "key", Value::String) {
                 trace!("API request: key_get {}", v);
-                respond!(DBCELL.write().await.key_increment(v))
+                respond!(db.write().await.key_increment(v))
             } else {
                 invalid_param!()
             }
@@ -225,7 +234,7 @@ pub async fn process_request(
         "key_decrement" => run_request!(vec!["key"], {
             if let Some(v) = parse_jsonrpc_request_param!(request, "key", Value::String) {
                 trace!("API request: key_get {}", v);
-                respond!(DBCELL.write().await.key_decrement(v))
+                respond!(db.write().await.key_decrement(v))
             } else {
                 invalid_param!()
             }
@@ -237,7 +246,7 @@ pub async fn process_request(
                 let k = key.unwrap();
                 let dk = dst_key.unwrap();
                 trace!("API request: key_copy {} -> {}", k, dk);
-                respond!(DBCELL.write().await.key_copy(k, dk))
+                respond!(db.write().await.key_copy(k, dk))
             } else {
                 invalid_param!()
             }
@@ -249,7 +258,7 @@ pub async fn process_request(
                 let k = key.unwrap();
                 let dk = dst_key.unwrap();
                 trace!("API request: key_rename {} -> {}", k, dk);
-                respond!(DBCELL.write().await.key_rename(k, dk))
+                respond!(db.write().await.key_rename(k, dk))
             } else {
                 invalid_param!()
             }
@@ -257,7 +266,7 @@ pub async fn process_request(
         "key_delete" => run_request!(vec!["key"], {
             if let Some(v) = parse_jsonrpc_request_param!(request, "key", Value::String) {
                 trace!("API request: key_delete {}", v);
-                respond!(DBCELL.write().await.key_delete(v))
+                respond!(db.write().await.key_delete(v))
             } else {
                 invalid_param!()
             }
@@ -265,35 +274,35 @@ pub async fn process_request(
         "key_delete_recursive" => run_request!(vec!["key"], {
             if let Some(v) = parse_jsonrpc_request_param!(request, "key", Value::String) {
                 trace!("API request: key_delete_recursive {}", v);
-                respond!(DBCELL.write().await.key_delete_recursive(v))
+                respond!(db.write().await.key_delete_recursive(v))
             } else {
                 invalid_param!()
             }
         }),
         "check" => {
             trace!("API request: check");
-            run_request!(vec![], { respond!(DBCELL.write().await.check()) })
+            run_request!(vec![], { respond!(db.write().await.check()) })
         }
         "repair" => {
             trace!("API request: repair");
-            run_request!(vec![], { respond!(DBCELL.write().await.repair()) })
+            run_request!(vec![], { respond!(db.write().await.repair()) })
         }
         "purge" => {
             trace!("API request: purge");
-            run_request!(vec![], { respond!(DBCELL.write().await.purge()) })
+            run_request!(vec![], { respond!(db.write().await.purge()) })
         }
         "purge_cache" => {
             trace!("API request: purge_cache");
-            run_request!(vec![], { respond!(DBCELL.write().await.purge_cache()) })
+            run_request!(vec![], { respond!(db.write().await.purge_cache()) })
         }
         "safe_purge" => {
             trace!("API request: safe_purge");
-            run_request!(vec![], { respond!(DBCELL.write().await.safe_purge()) })
+            run_request!(vec![], { respond!(db.write().await.safe_purge()) })
         }
         "key_dump" => run_request!(vec!["key"], {
             if let Some(v) = parse_jsonrpc_request_param!(request, "key", Value::String) {
                 trace!("API request: key_dump {}", v);
-                respond!(DBCELL.write().await.key_dump(v))
+                respond!(db.write().await.key_dump(v))
             } else {
                 invalid_param!()
             }
@@ -301,7 +310,7 @@ pub async fn process_request(
         "key_load" => run_request!(vec!["data"], {
             if let Some(v) = parse_jsonrpc_request_param!(request, "data", Value::Array) {
                 trace!("API request: key_load");
-                respond!(DBCELL.write().await.key_load_from_serialized(v))
+                respond!(db.write().await.key_load_from_serialized(v))
             } else {
                 invalid_param!()
             }

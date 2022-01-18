@@ -7,10 +7,11 @@ use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::RwLock;
 
 use std::fmt;
+use std::sync::Arc;
 
 use yedb::common::JSONRpcRequest;
-use yedb::{Error, ErrorKind};
-use yedb::server::{YedbServerErrorKind, process_request, DBCELL};
+use yedb::server::{process_request, YedbServerErrorKind};
+use yedb::{Database, Error, ErrorKind};
 
 use log::LevelFilter;
 use syslog::{BasicLogger, Facility, Formatter3164};
@@ -64,10 +65,11 @@ pub struct ServerData {
 }
 
 lazy_static! {
-    pub static ref SDATA: RwLock<ServerData> = RwLock::new(ServerData {
+    static ref SDATA: RwLock<ServerData> = RwLock::new(ServerData {
         pid_path: String::new(),
         socket_path: None
     });
+    static ref DBCELL: Arc<RwLock<Database>> = <_>::default();
 }
 
 macro_rules! handle_term {
@@ -315,7 +317,7 @@ macro_rules! handle_request {
                     error!("API error: invalid request");
                     break;
                 }
-                match process_request(request).await {
+                match process_request(&DBCELL, request).await {
                     Ok(response) => {
                         let response_buf = match rmp_serde::to_vec_named(&response) {
                             Ok(v) => v,
