@@ -1,5 +1,3 @@
-use rmp_serde;
-
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -188,8 +186,8 @@ impl Error {
         self.error_kind
     }
 
-    pub fn get_message(&self) -> String {
-        self.message.clone()
+    pub fn get_message(&self) -> &str {
+        &self.message
     }
 
     pub fn err_invalid_parameter() -> Self {
@@ -220,7 +218,7 @@ pub struct JSONRpcRequest {
     jsonrpc: String,
     pub id: Value,
     pub method: String,
-    pub params: HashMap<String, serde_json::Value>,
+    pub params: HashMap<String, Value>,
 }
 
 impl JSONRpcRequest {
@@ -230,6 +228,14 @@ impl JSONRpcRequest {
             jsonrpc: "2.0".to_owned(),
             method: method.to_owned(),
             params: HashMap::new(),
+        }
+    }
+    pub fn with_params(id: u64, method: &str, params: HashMap<String, Value>) -> Self {
+        Self {
+            id: Value::from(id),
+            jsonrpc: "2.0".to_owned(),
+            method: method.to_owned(),
+            params,
         }
     }
 

@@ -3,7 +3,53 @@ use crate::Database;
 use crate::Error;
 use log::trace;
 use serde_json::{json, Value};
+use std::collections::HashMap;
 use tokio::sync::RwLock;
+
+#[cfg(feature = "elbus-rpc")]
+use elbus::rpc::{RpcError, RpcEvent, RpcHandlers, RpcResult};
+#[cfg(feature = "elbus-rpc")]
+use elbus::Frame;
+
+#[cfg(feature = "elbus-rpc")]
+struct ElbusApi {}
+
+#[cfg(feature = "elbus-rpc")]
+#[async_trait::async_trait]
+impl RpcHandlers for ElbusApi {
+    async fn handle_notification(&self, _event: RpcEvent) {}
+    async fn handle_frame(&self, _frame: Frame) {}
+    async fn handle_call(&self, event: RpcEvent) -> RpcResult {
+        let method = event.parse_method()?;
+        let payload = event.payload();
+        let params: HashMap<String, Value> = if payload.is_empty() {
+            HashMap::new()
+        } else {
+            rmp_serde::from_read_ref(event.payload())?
+        };
+        let id = event.id();
+        let request = JSONRpcRequest::with_params(id.into(), method, params);
+        match process_request(request).await {
+            Ok(v) => {
+                if id != 0 {
+                    if let Some(e) = v.error {
+                        Err(RpcError::new(
+                            e.kind() as i16,
+                            Some(RpcError::convert_data(e.get_message())),
+                        ))
+                    } else if let Some(payload) = v.result {
+                        Ok(Some(rmp_serde::to_vec_named(&payload)?))
+                    } else {
+                        Ok(None)
+                    }
+                } else {
+                    Ok(None)
+                }
+            }
+            Err(_) => Err(RpcError::internal(None)),
+        }
+    }
+}
 
 lazy_static! {
     pub static ref DBCELL: RwLock<Database> = RwLock::new(Database::new());
