@@ -69,7 +69,7 @@ lazy_static! {
         pid_path: String::new(),
         socket_path: None
     });
-    static ref DBCELL: Arc<RwLock<Database>> = <_>::default();
+    static ref DBCELL: Arc<RwLock<Database>> = yedb::server::create_db();
 }
 
 macro_rules! handle_term {

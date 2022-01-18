@@ -14,15 +14,31 @@ use elbus::rpc::{RpcError, RpcEvent, RpcHandlers, RpcResult};
 #[cfg(feature = "elbus-rpc")]
 use elbus::Frame;
 
+#[inline]
+pub fn create_db() -> Arc<RwLock<Database>> {
+    <_>::default()
+}
+
 #[cfg(feature = "elbus-rpc")]
 pub struct ElbusApi {
     db: Arc<RwLock<Database>>,
 }
 
 #[cfg(feature = "elbus-rpc")]
+impl Default for ElbusApi {
+    fn default() -> Self {
+        Self { db: <_>::default() }
+    }
+}
+
+#[cfg(feature = "elbus-rpc")]
 impl ElbusApi {
     pub fn new(db: Arc<RwLock<Database>>) -> Self {
         Self { db }
+    }
+    #[inline]
+    pub fn db(&self) -> Arc<RwLock<Database>> {
+        self.db.clone()
     }
 }
 
