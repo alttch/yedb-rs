@@ -288,7 +288,7 @@ pub use client_async::YedbClientAsync;
 #[cfg(feature = "client-async")]
 pub use client_async::YedbClientPoolAsync;
 
-#[cfg(feature = "server")]
+#[cfg(any(feature = "server", feature = "server-embed"))]
 #[path = "server.rs"]
 pub mod server;
 

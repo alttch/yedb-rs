@@ -5,7 +5,7 @@ use log::trace;
 use serde_json::{json, Value};
 #[cfg(feature = "elbus-rpc")]
 use std::collections::HashMap;
-#[cfg(feature = "elbus-rpc")]
+#[cfg(any(feature = "server-embed", feature = "server"))]
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -14,6 +14,7 @@ use elbus::rpc::{RpcError, RpcEvent, RpcHandlers, RpcResult};
 #[cfg(feature = "elbus-rpc")]
 use elbus::Frame;
 
+#[cfg(any(feature = "server-embed", feature = "server"))]
 #[inline]
 pub fn create_db() -> Arc<RwLock<Database>> {
     <_>::default()

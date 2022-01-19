@@ -64,6 +64,7 @@ cli = ["chrono", "colored", "clap", "prettytable-rs", "getch", "bma-benchmark" ]
 client-sync = []
 client-async = [ "tokio", "simple-pool" ]
 elbus-rpc = ["async-trait", "elbus"]
+server-embed = ["tokio"]
 
 [[bin]]
 name = "yedb-server"
