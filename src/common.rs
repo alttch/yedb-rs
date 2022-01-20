@@ -119,6 +119,30 @@ pub enum ErrorKind {
     Other = ERR_CODE_OTHER,
 }
 
+impl From<i16> for ErrorKind {
+    fn from(code: i16) -> Self {
+        match code {
+            ERR_CODE_IO => ErrorKind::IOError,
+            ERR_CODE_DATA => ErrorKind::DataError,
+            ERR_CODE_TIMEOUT => ErrorKind::TimeoutError,
+            ERR_CODE_KEY_NOT_FOUND => ErrorKind::KeyNotFound,
+            ERR_CODE_FIELD_NOT_FOUND => ErrorKind::FieldNotFound,
+            ERR_CODE_SCHEMA_VALIDATION => ErrorKind::SchemaValidationError,
+            ERR_CODE_UNSUPPORTED_FORMAT => ErrorKind::UnsupportedFormat,
+            ERR_CODE_UNSUPPORTED_VERSION => ErrorKind::UnsupportedVersion,
+            ERR_CODE_NOT_OPENED => ErrorKind::NotOpened,
+            ERR_CODE_BUSY => ErrorKind::Busy,
+            ERR_CODE_NOT_INITIALIZED => ErrorKind::NotInitialized,
+            ERR_CODE_REQUEST => ErrorKind::RequestError,
+            ERR_CODE_PROTO => ErrorKind::ProtocolError,
+            ERR_CODE_EOF => ErrorKind::Eof,
+            ERR_CODE_METHOD_NOT_FOUND => ErrorKind::MethodNotFound,
+            ERR_CODE_INVALID_PARAMS => ErrorKind::InvalidParameter,
+            _ => ErrorKind::Other,
+        }
+    }
+}
+
 impl std::fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
@@ -210,6 +234,20 @@ impl std::error::Error for Error {}
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}: {}", self.error_kind, self.message)
+    }
+}
+
+#[cfg(feature = "client-elbus-async")]
+impl From<elbus::rpc::RpcError> for Error {
+    fn from(err: elbus::rpc::RpcError) -> Error {
+        Error::new(
+            err.code().into(),
+            if let Some(data) = err.data() {
+                std::str::from_utf8(data).unwrap_or_default()
+            } else {
+                ""
+            },
+        )
     }
 }
 

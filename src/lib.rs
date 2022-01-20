@@ -288,6 +288,12 @@ pub use client_async::YedbClientAsync;
 #[cfg(feature = "client-async")]
 pub use client_async::YedbClientPoolAsync;
 
+#[cfg(feature = "client-elbus-async")]
+#[path = "client_elbus_async.rs"]
+pub mod client_elbus_async;
+#[cfg(feature = "client-elbus-async")]
+pub use client_elbus_async::YedbClientElbusAsync;
+
 #[cfg(any(feature = "server", feature = "server-embed"))]
 #[path = "server.rs"]
 pub mod server;
