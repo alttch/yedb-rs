@@ -240,13 +240,18 @@ impl std::fmt::Display for Error {
 #[cfg(feature = "client-elbus-async")]
 impl From<elbus::rpc::RpcError> for Error {
     fn from(err: elbus::rpc::RpcError) -> Error {
+        let code = err.code();
         Error::new(
-            err.code().into(),
-            if let Some(data) = err.data() {
-                std::str::from_utf8(data).unwrap_or_default()
-            } else {
-                ""
-            },
+            code.into(),
+            format!(
+                "(code: {}) {}",
+                code,
+                if let Some(data) = err.data() {
+                    std::str::from_utf8(data).unwrap_or_default()
+                } else {
+                    ""
+                }
+            ),
         )
     }
 }

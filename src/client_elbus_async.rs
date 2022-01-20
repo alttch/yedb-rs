@@ -34,6 +34,7 @@ macro_rules! call {
         let mut params = BTreeMap::new();
         dbg!($params);
         while let Some((k, v)) = $params.pop() {
+            dbg!(&k, &v);
             params.insert(k, v);
         }
         dbg!(&params);
