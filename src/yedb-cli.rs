@@ -793,13 +793,13 @@ async fn main() {
     let mut db: Box<dyn YedbClientAsyncExt> =
         if let Some(elbus_path) = opts.path.strip_prefix("elbus://") {
             let mut sp = elbus_path.rsplitn(2, ':');
-            let path = sp.next().unwrap();
+            let target = sp.next().unwrap();
+            let path = sp.next().expect("no elbus target specified");
             let me = format!("yedb-cli-{}", std::process::id());
             let client = elbus::ipc::Client::connect(&elbus::ipc::Config::new(path, &me))
                 .await
                 .unwrap();
             let rpc = elbus::rpc::RpcClient::new(client, elbus::rpc::DummyHandlers {});
-            let target = sp.next().expect("no elbus target specified");
             Box::new(YedbClientElbusAsync::new(
                 Arc::new(rpc),
                 target,

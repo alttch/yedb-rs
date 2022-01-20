@@ -25,16 +25,18 @@ macro_rules! do_call {
             .rpc
             .call(&$self.target, $method, $payload, $self.qos)
             .await?;
-        rmp_serde::from_read_ref(&result.payload()).map_err(Into::into)
+        rmp_serde::from_read_ref(&result.payload()).map_err(Into::<Error>::into)
     }};
 }
 
 macro_rules! call {
     ($self: expr, $method: expr, $params: expr) => {{
         let mut params = BTreeMap::new();
+        dbg!($params);
         while let Some((k, v)) = $params.pop() {
             params.insert(k, v);
         }
+        dbg!(&params);
         do_call!($self, $method, rmp_serde::to_vec_named(&params)?.into())
     }};
     ($self: expr, $method: expr) => {{
@@ -140,7 +142,8 @@ where
         call!(self, "info")
     }
     async fn test(&mut self) -> Result<(), Error> {
-        call!(self, "test")
+        let _result: BTreeMap<String, Value> = call!(self, "test")?;
+        Ok(())
     }
     async fn check(&mut self) -> Result<Vec<String>, Error> {
         call!(self, "check")
