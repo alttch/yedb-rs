@@ -56,9 +56,6 @@ impl fmt::Display for BenchmarkOp {
 #[allow(clippy::cast_possible_truncation)]
 #[allow(clippy::cast_sign_loss)]
 async fn benchmark(db: &mut Box<dyn YedbClientAsyncExt>, path: &str, nt: u32, iterations: u32) {
-    if path.starts_with("elbus://") {
-        unimplemented!("Benchmark over ELBUS is not implemented");
-    }
     let i = db.info().await.unwrap();
     let old_cache_size = i.cache_size;
     db.key_delete_recursive(".benchmark").await.unwrap();
@@ -95,7 +92,7 @@ async fn benchmark(db: &mut Box<dyn YedbClientAsyncExt>, path: &str, nt: u32, it
                 let db_path = path.to_owned();
                 let errs = errors.clone();
                 let t = tokio::spawn(async move {
-                    let mut session = YedbClientAsync::new(&db_path);
+                    let mut session = create_client(&db_path, thread_no + 1).await;
                     for x in 0..(iterations / nt) {
                         let key_name = format!(".benchmark/t{}/{}_{}", thread_no, &op_name, x);
                         if match bm_op {
@@ -128,7 +125,7 @@ async fn benchmark(db: &mut Box<dyn YedbClientAsyncExt>, path: &str, nt: u32, it
         let db_path = path.to_owned();
         let errs = errors.clone();
         let t = tokio::spawn(async move {
-            let mut session = YedbClientAsync::new(&db_path);
+            let mut session = create_client(&db_path, thread_no + 1).await;
             let key_name = format!(".benchmark/incr/increment_{}", thread_no);
             for _ in 0..(iterations / nt) {
                 if session.key_increment(&key_name).await.is_err() {
@@ -786,28 +783,31 @@ fn convert_bool(value: Option<bool>, mode: ConvertBools) -> String {
     }
 }
 
+async fn create_client(path: &str, id: u32) -> Box<dyn YedbClientAsyncExt + Send + 'static> {
+    if let Some(elbus_path) = path.strip_prefix("elbus://") {
+        let mut sp = elbus_path.rsplitn(2, ':');
+        let target = sp.next().unwrap();
+        let path = sp.next().expect("no elbus target specified");
+        let me = format!("yedb-cli-{}-{}", std::process::id(), id);
+        let client = elbus::ipc::Client::connect(&elbus::ipc::Config::new(path, &me))
+            .await
+            .unwrap();
+        let rpc = elbus::rpc::RpcClient::new(client, elbus::rpc::DummyHandlers {});
+        Box::new(YedbClientElbusAsync::new(
+            Arc::new(rpc),
+            target,
+            elbus::QoS::RealtimeProcessed,
+        ))
+    } else {
+        Box::new(YedbClientAsync::new(path))
+    }
+}
+
 #[allow(clippy::too_many_lines)]
 #[tokio::main(worker_threads = 1)]
 async fn main() {
     let opts: Opts = Opts::parse();
-    let mut db: Box<dyn YedbClientAsyncExt> =
-        if let Some(elbus_path) = opts.path.strip_prefix("elbus://") {
-            let mut sp = elbus_path.rsplitn(2, ':');
-            let target = sp.next().unwrap();
-            let path = sp.next().expect("no elbus target specified");
-            let me = format!("yedb-cli-{}", std::process::id());
-            let client = elbus::ipc::Client::connect(&elbus::ipc::Config::new(path, &me))
-                .await
-                .unwrap();
-            let rpc = elbus::rpc::RpcClient::new(client, elbus::rpc::DummyHandlers {});
-            Box::new(YedbClientElbusAsync::new(
-                Arc::new(rpc),
-                target,
-                elbus::QoS::RealtimeProcessed,
-            ))
-        } else {
-            Box::new(YedbClientAsync::new(&opts.path))
-        };
+    let mut db: Box<dyn YedbClientAsyncExt> = create_client(&opts.path, 0).await;
     let exit_code = match opts.cmd {
         Cmd::Version => {
             println!("{} : {}", "yedb-rs".blue().bold(), VERSION.yellow());
