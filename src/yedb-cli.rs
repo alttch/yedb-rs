@@ -17,8 +17,8 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use chrono::{DateTime, Local};
 use yedb::{
-    Error, ErrorKind, SerializationEngine, YedbClientAsync, YedbClientAsyncExt, ENGINE_VERSION,
-    VERSION,
+    Error, ErrorKind, SerializationEngine, YedbClientAsync, YedbClientAsyncExt,
+    YedbClientElbusAsync, ENGINE_VERSION, VERSION,
 };
 
 use clap::Clap;
@@ -55,7 +55,10 @@ impl fmt::Display for BenchmarkOp {
 #[allow(clippy::cast_precision_loss)]
 #[allow(clippy::cast_possible_truncation)]
 #[allow(clippy::cast_sign_loss)]
-async fn benchmark(db: &mut YedbClientAsync, nt: u32, iterations: u32) {
+async fn benchmark(db: &mut Box<dyn YedbClientAsyncExt>, path: &str, nt: u32, iterations: u32) {
+    if path.starts_with("elbus://") {
+        unimplemented!("Benchmark over ELBUS is not implemented");
+    }
     let i = db.info().await.unwrap();
     let old_cache_size = i.cache_size;
     db.key_delete_recursive(".benchmark").await.unwrap();
@@ -89,7 +92,7 @@ async fn benchmark(db: &mut YedbClientAsync, nt: u32, iterations: u32) {
                 let op = op.clone();
                 let op_name = op.0;
                 let op_value = op.1;
-                let db_path = db.path.clone();
+                let db_path = path.to_owned();
                 let errs = errors.clone();
                 let t = tokio::spawn(async move {
                     let mut session = YedbClientAsync::new(&db_path);
@@ -122,7 +125,7 @@ async fn benchmark(db: &mut YedbClientAsync, nt: u32, iterations: u32) {
     let errors = Arc::new(atomic::AtomicU32::new(0));
     staged_benchmark_start!("key_increment");
     for thread_no in 0..nt {
-        let db_path = db.path.clone();
+        let db_path = path.to_owned();
         let errs = errors.clone();
         let t = tokio::spawn(async move {
             let mut session = YedbClientAsync::new(&db_path);
@@ -153,7 +156,7 @@ struct Opts {
     #[clap(
         short = 'C',
         long = "connect",
-        about = "path to socket or tcp://host:port",
+        about = "path to socket or tcp://host:port or elbus://<ELBUS_PATH>:<ELBUS_TARGET>",
         default_value = "tcp://127.0.0.1:8870"
     )]
     path: String,
@@ -474,7 +477,7 @@ macro_rules! output_editor_error {
     };
 }
 
-async fn edit_key(db: &mut YedbClientAsync, key: &str, value: Option<&Value>) -> i32 {
+async fn edit_key(db: &mut Box<dyn YedbClientAsyncExt>, key: &str, value: Option<&Value>) -> i32 {
     let mut code = 0;
     let mut hasher = Sha256::new();
     hasher.update(&key);
@@ -551,7 +554,11 @@ macro_rules! format_bool {
     };
 }
 
-async fn server_set_prop(db: &mut YedbClientAsync, prop: &str, value: String) -> Result<(), Error> {
+async fn server_set_prop(
+    db: &mut Box<dyn YedbClientAsyncExt>,
+    prop: &str,
+    value: String,
+) -> Result<(), Error> {
     let val = match prop {
         "auto_flush" | "repair_recommended" => format_bool!(value),
         "cache_size" | "auto_bak" => match value.parse::<usize>() {
@@ -631,7 +638,11 @@ fn display_obj(obj: &serde_json::map::Map<String, Value>) {
 }
 
 #[allow(clippy::cast_possible_truncation)]
-async fn save_dump(db: &mut YedbClientAsync, key: &str, file_name: &str) -> Result<usize, Error> {
+async fn save_dump(
+    db: &mut Box<dyn YedbClientAsyncExt>,
+    key: &str,
+    file_name: &str,
+) -> Result<usize, Error> {
     let key_data: Vec<(String, Value)> = db.key_dump(key).await?;
     let mut f = tokio::fs::File::create(file_name).await?;
     let mut keys_dumped = 0;
@@ -664,7 +675,7 @@ enum DumpLoadMode {
 
 #[allow(clippy::unnecessary_mut_passed)]
 async fn load_dump(
-    db: &mut YedbClientAsync,
+    db: &mut Box<dyn YedbClientAsyncExt>,
     file_name: &str,
     mode: DumpLoadMode,
 ) -> Result<usize, Error> {
@@ -779,7 +790,24 @@ fn convert_bool(value: Option<bool>, mode: ConvertBools) -> String {
 #[tokio::main(worker_threads = 1)]
 async fn main() {
     let opts: Opts = Opts::parse();
-    let mut db = YedbClientAsync::new(&opts.path);
+    let mut db: Box<dyn YedbClientAsyncExt> =
+        if let Some(elbus_path) = opts.path.strip_prefix("elbus://") {
+            let mut sp = elbus_path.rsplitn(2, ':');
+            let path = sp.next().unwrap();
+            let me = format!("yedb-cli-{}", std::process::id());
+            let client = elbus::ipc::Client::connect(&elbus::ipc::Config::new(path, &me))
+                .await
+                .unwrap();
+            let rpc = elbus::rpc::RpcClient::new(client, elbus::rpc::DummyHandlers {});
+            let target = sp.next().expect("no elbus target specified");
+            Box::new(YedbClientElbusAsync::new(
+                Arc::new(rpc),
+                target,
+                elbus::QoS::RealtimeProcessed,
+            ))
+        } else {
+            Box::new(YedbClientAsync::new(&opts.path))
+        };
     let exit_code = match opts.cmd {
         Cmd::Version => {
             println!("{} : {}", "yedb-rs".blue().bold(), VERSION.yellow());
@@ -805,7 +833,7 @@ async fn main() {
             }
         },
         Cmd::Benchmark(c) => {
-            benchmark(&mut db, c.workers, c.iterations).await;
+            benchmark(&mut db, &opts.path, c.workers, c.iterations).await;
             0
         }
         Cmd::Server(c) => output_result_ok(server_set_prop(&mut db, &c.prop, c.value).await),
