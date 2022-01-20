@@ -118,7 +118,7 @@ db.close().unwrap();
 
 ### TCP/Unix socket client example
 
-```rust
+```rust,ignore
 use yedb::YedbClient;
 use serde_json::Value;
 
@@ -131,7 +131,7 @@ client.key_delete(&key_name).unwrap();
 
 ### Async TCP/Unix socket client example
 
-```rust
+```rust,ignore
 use serde_json::Value;
 use yedb::{YedbClientAsync, YedbClientAsyncExt};
 
@@ -146,11 +146,11 @@ async fn test() {
 
 ### Async TCP/Unix socket client pool example
 
-```rust
+```rust,ignore
 use serde_json::Value;
 use std::sync::Arc;
 use std::time::Duration;
-use yedb::YedbClientPoolAsync;
+use yedb::{YedbClientPoolAsync, YedbClientAsyncExt};
 
 async fn test() {
     let pool = Arc::new(
