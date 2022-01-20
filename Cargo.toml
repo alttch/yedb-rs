@@ -21,12 +21,7 @@ name = "yedb"
 path = "src/lib.rs"
 
 [dependencies]
-tokio = { version = "1.0.1", features = [
-  "fs",
-    "macros",
-    "signal",
-    "rt-multi-thread",
-], optional = true }
+tokio = { version = "1.15.0", features = ["full"], optional = true }
 serde = { version =  "1.0", features = ["derive"] }
 serde_repr = "0.1.7"
 serde_json = "1.0"
@@ -60,7 +55,7 @@ async-trait = { version = "0.1.51", optional = true }
 
 [features]
 server = ["syslog", "chrono", "colored", "clap", "tokio" ]
-cli = ["chrono", "colored", "clap", "prettytable-rs", "getch", "bma-benchmark" ]
+cli = ["chrono", "colored", "clap", "prettytable-rs", "getch", "bma-benchmark", "tokio", "client-async" ]
 client-sync = []
 client-async = [ "tokio", "simple-pool" ]
 client-elbus-async = ["elbus"]
