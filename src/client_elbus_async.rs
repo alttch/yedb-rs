@@ -30,12 +30,12 @@ macro_rules! do_call {
 }
 
 macro_rules! call {
-    ($self: expr, $method: expr, $params: expr) => {{
-        let mut params = BTreeMap::new();
-        dbg!($params);
-        while let Some((k, v)) = $params.pop() {
+    ($self: expr, $method: expr, $p: expr) => {{
+        let mut params: BTreeMap<String, Value> = BTreeMap::new();
+        dbg!($p);
+        while let Some((k, v)) = $p.remove(0) {
             dbg!(&k, &v);
-            params.insert(k, v);
+            //params.insert(k, v);
         }
         dbg!(&params);
         do_call!($self, $method, rmp_serde::to_vec_named(&params)?.into())
