@@ -55,6 +55,7 @@ where
     }
 }
 
+#[allow(clippy::useless_vec)]
 #[async_trait::async_trait]
 impl<R> YedbClientAsyncExt for YedbClientElbusAsync<R>
 where
