@@ -16,7 +16,10 @@ use std::time::{Duration, SystemTime};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use chrono::{DateTime, Local};
-use yedb::{Error, ErrorKind, SerializationEngine, YedbClientAsync, ENGINE_VERSION, VERSION};
+use yedb::{
+    Error, ErrorKind, SerializationEngine, YedbClientAsync, YedbClientAsyncExt, ENGINE_VERSION,
+    VERSION,
+};
 
 use clap::Clap;
 

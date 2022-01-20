@@ -57,8 +57,8 @@ async-trait = { version = "0.1.51", optional = true }
 server = ["syslog", "chrono", "colored", "clap", "tokio" ]
 cli = ["chrono", "colored", "clap", "prettytable-rs", "getch", "bma-benchmark", "tokio", "client-async" ]
 client-sync = []
-client-async = [ "tokio", "simple-pool" ]
-client-elbus-async = ["elbus"]
+client-async = [ "tokio", "simple-pool", "async-trait" ]
+client-elbus-async = ["elbus", "client-async", "async-trait"]
 elbus-rpc = ["async-trait", "elbus"]
 server-embed = ["tokio"]
 

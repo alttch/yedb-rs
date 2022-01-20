@@ -133,7 +133,7 @@ client.key_delete(&key_name).unwrap();
 
 ```rust
 use serde_json::Value;
-use yedb::YedbClientAsync;
+use yedb::{YedbClientAsync, YedbClientAsyncExt};
 
 async fn test() {
     let mut client = YedbClientAsync::new("tcp://127.0.0.1:8870");

@@ -9,6 +9,35 @@ use std::time::Duration;
 use super::common::{DBInfo, Error, ErrorKind, JSONRpcRequest, JSONRpcResponse, KeyExplained};
 use simple_pool::{ResourcePool, ResourcePoolGuard};
 
+#[async_trait::async_trait]
+pub trait YedbClientAsyncExt {
+    async fn key_list(&mut self, key: &str) -> Result<Vec<String>, Error>;
+    async fn key_list_all(&mut self, key: &str) -> Result<Vec<String>, Error>;
+    async fn key_get(&mut self, key: &str) -> Result<Value, Error>;
+    async fn key_get_field(&mut self, key: &str, field: &str) -> Result<Value, Error>;
+    async fn key_get_recursive(&mut self, key: &str) -> Result<Vec<(String, Value)>, Error>;
+    async fn key_copy(&mut self, key: &str, dst_key: &str) -> Result<(), Error>;
+    async fn key_rename(&mut self, key: &str, dst_key: &str) -> Result<(), Error>;
+    async fn key_explain(&mut self, key: &str) -> Result<KeyExplained, Error>;
+    async fn key_set(&mut self, key: &str, value: Value) -> Result<(), Error>;
+    async fn key_set_field(&mut self, key: &str, field: &str, value: Value) -> Result<(), Error>;
+    async fn key_delete_field(&mut self, key: &str, field: &str) -> Result<(), Error>;
+    async fn key_increment(&mut self, key: &str) -> Result<i64, Error>;
+    async fn key_decrement(&mut self, key: &str) -> Result<i64, Error>;
+    async fn key_delete(&mut self, key: &str) -> Result<(), Error>;
+    async fn key_delete_recursive(&mut self, key: &str) -> Result<(), Error>;
+    async fn server_set(&mut self, name: &str, value: Value) -> Result<(), Error>;
+    async fn info(&mut self) -> Result<DBInfo, Error>;
+    async fn test(&mut self) -> Result<(), Error>;
+    async fn check(&mut self) -> Result<Vec<String>, Error>;
+    async fn repair(&mut self) -> Result<Vec<(String, bool)>, Error>;
+    async fn purge(&mut self) -> Result<Vec<String>, Error>;
+    async fn purge_cache(&mut self) -> Result<(), Error>;
+    async fn safe_purge(&mut self) -> Result<(), Error>;
+    async fn key_dump(&mut self, key: &str) -> Result<Vec<(String, Value)>, Error>;
+    async fn key_load(&mut self, data: Vec<(String, Value)>) -> Result<(), Error>;
+}
+
 pub struct YedbClientPoolAsyncBuilder {}
 
 pub struct YedbClientPoolAsync {
@@ -154,7 +183,6 @@ impl YedbClientAsync {
         self.request_id += 1;
         self.request_id
     }
-
     async fn get_stream(&mut self) -> Result<&mut ClientStream, std::io::Error> {
         if let Some(ref mut v) = self.stream {
             Ok(v)
@@ -173,7 +201,7 @@ impl YedbClientAsync {
     /// # Errors
     ///
     /// Will return Err on failed calls
-    pub async fn call(&mut self, req: &JSONRpcRequest) -> Result<Value, Error> {
+    async fn call(&mut self, req: &JSONRpcRequest) -> Result<Value, Error> {
         let mut attempt = 0;
         let started = std::time::Instant::now();
         loop {
@@ -193,7 +221,6 @@ impl YedbClientAsync {
             }
         }
     }
-
     #[allow(clippy::cast_possible_truncation)]
     async fn _call(&mut self, req: &JSONRpcRequest) -> Result<Value, Error> {
         let mut frame = vec![1_u8, 2_u8];
@@ -225,11 +252,14 @@ impl YedbClientAsync {
             },
         }
     }
+}
 
+#[async_trait::async_trait]
+impl YedbClientAsyncExt for YedbClientAsync {
     /// # Errors
     ///
     /// Will return Err on failed calls
-    pub async fn key_list(&mut self, key: &str) -> Result<Vec<String>, Error> {
+    async fn key_list(&mut self, key: &str) -> Result<Vec<String>, Error> {
         let mut req = JSONRpcRequest::new(self.gen_id(), "key_list");
         req.set_param("key", Value::from(key));
         Ok(serde_json::from_value(self.call(&req).await?)?)
@@ -238,7 +268,7 @@ impl YedbClientAsync {
     /// # Errors
     ///
     /// Will return Err on failed calls
-    pub async fn key_list_all(&mut self, key: &str) -> Result<Vec<String>, Error> {
+    async fn key_list_all(&mut self, key: &str) -> Result<Vec<String>, Error> {
         let mut req = JSONRpcRequest::new(self.gen_id(), "key_list_all");
         req.set_param("key", Value::from(key));
         Ok(serde_json::from_value(self.call(&req).await?)?)
@@ -247,7 +277,7 @@ impl YedbClientAsync {
     /// # Errors
     ///
     /// Will return Err on failed calls
-    pub async fn key_get(&mut self, key: &str) -> Result<Value, Error> {
+    async fn key_get(&mut self, key: &str) -> Result<Value, Error> {
         let mut req = JSONRpcRequest::new(self.gen_id(), "key_get");
         req.set_param("key", Value::from(key));
         self.call(&req).await
@@ -256,7 +286,7 @@ impl YedbClientAsync {
     /// # Errors
     ///
     /// Will return Err on failed calls
-    pub async fn key_get_field(&mut self, key: &str, field: &str) -> Result<Value, Error> {
+    async fn key_get_field(&mut self, key: &str, field: &str) -> Result<Value, Error> {
         let mut req = JSONRpcRequest::new(self.gen_id(), "key_get_field");
         req.set_param("key", Value::from(key));
         req.set_param("field", Value::from(field));
@@ -266,7 +296,7 @@ impl YedbClientAsync {
     /// # Errors
     ///
     /// Will return Err on failed calls
-    pub async fn key_get_recursive(&mut self, key: &str) -> Result<Vec<(String, Value)>, Error> {
+    async fn key_get_recursive(&mut self, key: &str) -> Result<Vec<(String, Value)>, Error> {
         let mut req = JSONRpcRequest::new(self.gen_id(), "key_get_recursive");
         req.set_param("key", Value::from(key));
         Ok(serde_json::from_value(self.call(&req).await?)?)
@@ -275,7 +305,7 @@ impl YedbClientAsync {
     /// # Errors
     ///
     /// Will return Err on failed calls
-    pub async fn key_copy(&mut self, key: &str, dst_key: &str) -> Result<(), Error> {
+    async fn key_copy(&mut self, key: &str, dst_key: &str) -> Result<(), Error> {
         let mut req = JSONRpcRequest::new(self.gen_id(), "key_copy");
         req.set_param("key", Value::from(key));
         req.set_param("dst_key", Value::from(dst_key));
@@ -285,7 +315,7 @@ impl YedbClientAsync {
     /// # Errors
     ///
     /// Will return Err on failed calls
-    pub async fn key_rename(&mut self, key: &str, dst_key: &str) -> Result<(), Error> {
+    async fn key_rename(&mut self, key: &str, dst_key: &str) -> Result<(), Error> {
         let mut req = JSONRpcRequest::new(self.gen_id(), "key_rename");
         req.set_param("key", Value::from(key));
         req.set_param("dst_key", Value::from(dst_key));
@@ -295,7 +325,7 @@ impl YedbClientAsync {
     /// # Errors
     ///
     /// Will return Err on failed calls
-    pub async fn key_explain(&mut self, key: &str) -> Result<KeyExplained, Error> {
+    async fn key_explain(&mut self, key: &str) -> Result<KeyExplained, Error> {
         let mut req = JSONRpcRequest::new(self.gen_id(), "key_explain");
         req.set_param("key", Value::from(key));
         Ok(serde_json::from_value(self.call(&req).await?)?)
@@ -304,7 +334,7 @@ impl YedbClientAsync {
     /// # Errors
     ///
     /// Will return Err on failed calls
-    pub async fn key_set(&mut self, key: &str, value: Value) -> Result<(), Error> {
+    async fn key_set(&mut self, key: &str, value: Value) -> Result<(), Error> {
         let mut req = JSONRpcRequest::new(self.gen_id(), "key_set");
         req.set_param("key", Value::from(key));
         req.set_param("value", value);
@@ -314,12 +344,7 @@ impl YedbClientAsync {
     /// # Errors
     ///
     /// Will return Err on failed calls
-    pub async fn key_set_field(
-        &mut self,
-        key: &str,
-        field: &str,
-        value: Value,
-    ) -> Result<(), Error> {
+    async fn key_set_field(&mut self, key: &str, field: &str, value: Value) -> Result<(), Error> {
         let mut req = JSONRpcRequest::new(self.gen_id(), "key_set_field");
         req.set_param("key", Value::from(key));
         req.set_param("field", Value::from(field));
@@ -330,7 +355,7 @@ impl YedbClientAsync {
     /// # Errors
     ///
     /// Will return Err on failed calls
-    pub async fn key_delete_field(&mut self, key: &str, field: &str) -> Result<(), Error> {
+    async fn key_delete_field(&mut self, key: &str, field: &str) -> Result<(), Error> {
         let mut req = JSONRpcRequest::new(self.gen_id(), "key_delete_field");
         req.set_param("key", Value::from(key));
         req.set_param("field", Value::from(field));
@@ -340,7 +365,7 @@ impl YedbClientAsync {
     /// # Errors
     ///
     /// Will return Err on failed calls
-    pub async fn key_increment(&mut self, key: &str) -> Result<i64, Error> {
+    async fn key_increment(&mut self, key: &str) -> Result<i64, Error> {
         let mut req = JSONRpcRequest::new(self.gen_id(), "key_increment");
         req.set_param("key", Value::from(key));
         result_i64!(self, req)
@@ -349,7 +374,7 @@ impl YedbClientAsync {
     /// # Errors
     ///
     /// Will return Err on failed calls
-    pub async fn key_decrement(&mut self, key: &str) -> Result<i64, Error> {
+    async fn key_decrement(&mut self, key: &str) -> Result<i64, Error> {
         let mut req = JSONRpcRequest::new(self.gen_id(), "key_decrement");
         req.set_param("key", Value::from(key));
         result_i64!(self, req)
@@ -358,7 +383,7 @@ impl YedbClientAsync {
     /// # Errors
     ///
     /// Will return Err on failed calls
-    pub async fn key_delete(&mut self, key: &str) -> Result<(), Error> {
+    async fn key_delete(&mut self, key: &str) -> Result<(), Error> {
         let mut req = JSONRpcRequest::new(self.gen_id(), "key_delete");
         req.set_param("key", Value::from(key));
         result_ok!(self, req)
@@ -367,7 +392,7 @@ impl YedbClientAsync {
     /// # Errors
     ///
     /// Will return Err on failed calls
-    pub async fn key_delete_recursive(&mut self, key: &str) -> Result<(), Error> {
+    async fn key_delete_recursive(&mut self, key: &str) -> Result<(), Error> {
         let mut req = JSONRpcRequest::new(self.gen_id(), "key_delete_recursive");
         req.set_param("key", Value::from(key));
         result_ok!(self, req)
@@ -376,7 +401,7 @@ impl YedbClientAsync {
     /// # Errors
     ///
     /// Will return Err on failed calls
-    pub async fn server_set(&mut self, name: &str, value: Value) -> Result<(), Error> {
+    async fn server_set(&mut self, name: &str, value: Value) -> Result<(), Error> {
         let mut req = JSONRpcRequest::new(self.gen_id(), "server_set");
         req.set_param("name", Value::from(name));
         req.set_param("value", value);
@@ -386,7 +411,7 @@ impl YedbClientAsync {
     /// # Errors
     ///
     /// Will return Err on failed calls
-    pub async fn info(&mut self) -> Result<DBInfo, Error> {
+    async fn info(&mut self) -> Result<DBInfo, Error> {
         let req = JSONRpcRequest::new(self.gen_id(), "info");
         Ok(serde_json::from_value(self.call(&req).await?)?)
     }
@@ -394,7 +419,7 @@ impl YedbClientAsync {
     /// # Errors
     ///
     /// Will return Err on failed calls
-    pub async fn test(&mut self) -> Result<(), Error> {
+    async fn test(&mut self) -> Result<(), Error> {
         let req = JSONRpcRequest::new(self.gen_id(), "test");
         result_ok!(self, req)
     }
@@ -402,7 +427,7 @@ impl YedbClientAsync {
     /// # Errors
     ///
     /// Will return Err on failed calls
-    pub async fn check(&mut self) -> Result<Vec<String>, Error> {
+    async fn check(&mut self) -> Result<Vec<String>, Error> {
         let req = JSONRpcRequest::new(self.gen_id(), "check");
         Ok(serde_json::from_value(self.call(&req).await?)?)
     }
@@ -410,7 +435,7 @@ impl YedbClientAsync {
     /// # Errors
     ///
     /// Will return Err on failed calls
-    pub async fn repair(&mut self) -> Result<Vec<(String, bool)>, Error> {
+    async fn repair(&mut self) -> Result<Vec<(String, bool)>, Error> {
         let req = JSONRpcRequest::new(self.gen_id(), "repair");
         Ok(serde_json::from_value(self.call(&req).await?)?)
     }
@@ -418,7 +443,7 @@ impl YedbClientAsync {
     /// # Errors
     ///
     /// Will return Err on failed calls
-    pub async fn purge(&mut self) -> Result<Vec<String>, Error> {
+    async fn purge(&mut self) -> Result<Vec<String>, Error> {
         let req = JSONRpcRequest::new(self.gen_id(), "purge");
         Ok(serde_json::from_value(self.call(&req).await?)?)
     }
@@ -426,7 +451,7 @@ impl YedbClientAsync {
     /// # Errors
     ///
     /// Will return Err on failed calls
-    pub async fn purge_cache(&mut self) -> Result<(), Error> {
+    async fn purge_cache(&mut self) -> Result<(), Error> {
         let req = JSONRpcRequest::new(self.gen_id(), "purge_cache");
         result_ok!(self, req)
     }
@@ -435,7 +460,7 @@ impl YedbClientAsync {
     /// # Errors
     ///
     /// Will return Err on failed calls
-    pub async fn safe_purge(&mut self) -> Result<(), Error> {
+    async fn safe_purge(&mut self) -> Result<(), Error> {
         let req = JSONRpcRequest::new(self.gen_id(), "safe_purge");
         result_ok!(self, req)
     }
@@ -443,7 +468,7 @@ impl YedbClientAsync {
     /// # Errors
     ///
     /// Will return Err on failed calls
-    pub async fn key_dump(&mut self, key: &str) -> Result<Vec<(String, Value)>, Error> {
+    async fn key_dump(&mut self, key: &str) -> Result<Vec<(String, Value)>, Error> {
         let mut req = JSONRpcRequest::new(self.gen_id(), "key_dump");
         req.set_param("key", Value::from(key));
         Ok(serde_json::from_value(self.call(&req).await?)?)
@@ -452,7 +477,7 @@ impl YedbClientAsync {
     /// # Errors
     ///
     /// Will return Err on failed calls
-    pub async fn key_load(&mut self, data: Vec<(String, Value)>) -> Result<(), Error> {
+    async fn key_load(&mut self, data: Vec<(String, Value)>) -> Result<(), Error> {
         let mut req = JSONRpcRequest::new(self.gen_id(), "key_load");
         let data_to_load: Vec<Value> = data
             .into_iter()
