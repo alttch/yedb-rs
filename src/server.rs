@@ -10,7 +10,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 #[cfg(feature = "elbus-rpc")]
-use elbus::rpc::{RpcError, RpcEvent, RpcHandlers, RpcResult};
+use elbus::rpc::{rpc_err_str, RpcError, RpcEvent, RpcHandlers, RpcResult};
 #[cfg(feature = "elbus-rpc")]
 use elbus::Frame;
 
@@ -62,10 +62,7 @@ impl RpcHandlers for ElbusApi {
             Ok(v) => {
                 if id != 0 {
                     if let Some(e) = v.error {
-                        Err(RpcError::new(
-                            e.kind() as i16,
-                            Some(RpcError::convert_data(e.get_message())),
-                        ))
+                        Err(RpcError::new(e.kind() as i16, rpc_err_str(e.get_message())))
                     } else if let Some(payload) = v.result {
                         Ok(Some(rmp_serde::to_vec_named(&payload)?))
                     } else {
