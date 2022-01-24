@@ -227,7 +227,7 @@ use std::path::Path;
 use std::process;
 use std::time::{Duration, Instant, SystemTime, SystemTimeError};
 
-use log::{debug, error, warn};
+use log::{error, trace, warn};
 
 #[macro_use]
 extern crate lazy_static;
@@ -570,11 +570,11 @@ impl ServerInfo {
 fn sync_dir(dir: &str) -> Result<(), Error> {
     match fs::File::open(dir) {
         Ok(dh) => {
-            debug!("Syncing dir {}", dir);
+            trace!("syncing dir {}", dir);
             dh.sync_all()?;
         }
         Err(ref e) if e.kind() == io::ErrorKind::NotFound => {
-            debug!("Dir {} not found, skipping sync", dir);
+            trace!("dir {} not found, skipping sync", dir);
         }
         Err(e) => return Err(Error::new(ErrorKind::IOError, e)),
     };
@@ -584,7 +584,7 @@ fn sync_dir(dir: &str) -> Result<(), Error> {
 fn lock_ex(fh: &fs::File, timeout: Duration) -> Result<bool, Error> {
     let start = Instant::now();
     let mut locked_instantly = true;
-    debug!("Locking the database");
+    trace!("locking the database");
     loop {
         match fh.try_lock_exclusive() {
             Ok(()) => return Ok(locked_instantly),
@@ -735,9 +735,10 @@ impl Database {
     ///
     /// Will return Err if the database is already open or the format is unknown
     pub fn set_default_fmt(&mut self, fmt: &str, checksums: bool) -> Result<(), Error> {
-        debug!(
-            "Setting the default format to {} with checksums={}",
-            fmt, checksums
+        trace!(
+            "setting the default format to {} with checksums={}",
+            fmt,
+            checksums
         );
         if self.engine.is_some() {
             Err(Error::new(
@@ -758,24 +759,24 @@ impl Database {
     ///
     /// Will return Err if the database is already open
     pub fn set_db_path(&mut self, path: &str) -> Result<(), Error> {
-        debug!("Setting the DB path to {}", path);
+        trace!("setting the DB path to {}", path);
         if self.engine.is_some() {
             Err(Error::new(ErrorKind::Busy, "the database is opened"))
         } else {
             self.path = path.to_owned();
             self.key_path = self.path.clone() + "/keys";
-            debug!("Key path set to {}", self.key_path);
+            trace!("key path set to {}", self.key_path);
             self.trash_path = self.key_path.clone() + "/.trash";
             self.lock_path = path.to_string() + "/db.lock";
-            debug!("Lock file set to {}", self.lock_path);
+            trace!("lock file set to {}", self.lock_path);
             self.meta_path = path.to_string() + "/.yedb";
-            debug!("Lock meta file set to {}", self.meta_path);
+            trace!("lock meta file set to {}", self.meta_path);
             Ok(())
         }
     }
 
     pub fn set_cache_size(&mut self, size: usize) {
-        debug!("Setting the cache size to {} keys", size);
+        trace!("setting the cache size to {} keys", size);
         self.cache.resize(size);
     }
 
@@ -783,7 +784,7 @@ impl Database {
     ///
     /// Will return Err if the database is already open
     pub fn set_lock_path(&mut self, path: &str) -> Result<(), Error> {
-        debug!("Setting lock path to {}", path);
+        trace!("setting lock path to {}", path);
         if self.engine.is_some() {
             Err(Error::new(ErrorKind::Busy, "the database is opened"))
         } else {
@@ -796,7 +797,7 @@ impl Database {
     ///
     /// Will return Err on I/O errors or if the engine is not initialized
     pub fn open(&mut self) -> Result<ServerInfo, Error> {
-        debug!("Opening the database, path: {}", self.path);
+        trace!("opening the database, path: {}", self.path);
         if self.path.is_empty() {
             return Err(Error::new(ErrorKind::NotInitialized, "db path not set"));
         }
@@ -821,10 +822,10 @@ impl Database {
                     return Err(Error::new(ErrorKind::UnsupportedVersion, engine.version));
                 }
                 db_engine = Some(engine);
-                debug!("Database opened successfully");
+                trace!("database opened successfully");
             }
             Err(ref e) if e.kind() == io::ErrorKind::NotFound => {
-                debug!("No database found, creating new");
+                trace!("no database found, creating new");
                 if Path::new(&self.path).exists() {
                     return Err(Error::new(
                         ErrorKind::Other,
@@ -845,7 +846,7 @@ impl Database {
                     fh.sync_all()?;
                 }
                 db_engine = Some(engine);
-                debug!("Database created successfully");
+                trace!("database created successfully");
             }
             Err(e) => {
                 return Err(Error::new(ErrorKind::IOError, e));
@@ -883,7 +884,7 @@ impl Database {
                 };
             }
         } else {
-            debug!("The database is clean, no repairing recommended");
+            trace!("the database is clean, no repairing recommended");
         }
         let _r = fs::create_dir_all(&self.trash_path);
         let _r = fs::create_dir_all(&self.key_path);
@@ -897,7 +898,7 @@ impl Database {
     ///
     /// Will return errors if the database is not opened or on I/O errors
     pub fn close(&mut self) -> Result<(), Error> {
-        debug!("Closing the database {}", self.path);
+        trace!("closing the database {}", self.path);
         if self.engine.is_none() {
             return Err(Error::new(
                 ErrorKind::NotOpened,
@@ -914,13 +915,13 @@ impl Database {
 
     fn find_schema_key(&mut self, key: &str) -> Result<Option<String>, Error> {
         if key.starts_with(".schema/") || key == ".schema" {
-            debug!("Schema key for {} is virtual", key);
+            trace!("schema key for {} is virtual", key);
             return Ok(Some("!JSON Schema Draft-7".to_owned()));
         }
         let mut schema_key = ".schema/".to_owned() + key;
         loop {
             if self.key_exists(&schema_key)? {
-                debug!("Found Schema schema_key for {} at {}", key, schema_key);
+                trace!("found Schema schema_key for {} at {}", key, schema_key);
                 return Ok(Some(schema_key));
             }
             match schema_key.rfind('/') {
@@ -936,7 +937,7 @@ impl Database {
     }
 
     fn validate_schema(&mut self, key: &str, value: &Value) -> Result<(), Error> {
-        debug!("Validating schema for {}", key);
+        trace!("validating schema for {}", key);
         if key.starts_with(".schema/") || key == ".schema" {
             JSONSchema::options()
                 .with_draft(Draft::Draft7)
@@ -982,7 +983,7 @@ impl Database {
         stime: Option<u64>,
         ignore_schema: bool,
     ) -> Result<(), Error> {
-        debug!("Setting value for key {}", key);
+        trace!("setting value for key {}", key);
         let key = fmt_key(key);
         if key.is_empty() {
             return Err(Error::new(ErrorKind::KeyNotFound, key));
@@ -997,12 +998,12 @@ impl Database {
             match self.key_get(&key) {
                 Ok(v) => {
                     if v == value {
-                        debug!("Key {} not modified, skipping set", key);
+                        trace!("key {} not modified, skipping set", key);
                         return Ok(());
                     }
                 }
                 Err(_) => {
-                    debug!("Key {} not cached", key);
+                    trace!("key {} not cached", key);
                 }
             }
         }
@@ -1073,7 +1074,7 @@ impl Database {
         } else {
             key.to_owned() + "/"
         };
-        debug!("Purging cache for {}*", key);
+        trace!("purging cache for {}*", key);
         let to_remove: Vec<_> = self
             .cache
             .iter()
@@ -1092,9 +1093,12 @@ impl Database {
         no_flush: bool,
         dir_only: bool,
     ) -> Result<(), Error> {
-        debug!(
-            "Deleting key: {}, recursive: {}, no_flush: {}, dir_only: {}",
-            key, recursive, no_flush, dir_only
+        trace!(
+            "deleting key: {}, recursive: {}, no_flush: {}, dir_only: {}",
+            key,
+            recursive,
+            no_flush,
+            dir_only
         );
         let engine = get_engine!(self);
         let key = fmt_key(key);
@@ -1117,7 +1121,7 @@ impl Database {
                 key.replace("/", "_"),
                 timestamp_ns!()
             );
-            debug!("renaming dir {} to {}", &dn, &trashed);
+            trace!("renaming dir {} to {}", &dn, &trashed);
             fs::create_dir_all(&self.trash_path)?;
             let mut options = fs_extra::dir::CopyOptions::new();
             options.copy_inside = true;
@@ -1153,7 +1157,7 @@ impl Database {
                 timestamp_ns!(),
                 engine.get_suffix()
             );
-            debug!("renaming file {} to {}", &key_file, &trashed);
+            trace!("renaming file {} to {}", &key_file, &trashed);
             fs::create_dir_all(&self.trash_path)?;
             let mut options = fs_extra::file::CopyOptions::new();
             options.overwrite = true;
@@ -1187,7 +1191,7 @@ impl Database {
     }
 
     fn list_subkeys(&self, key: &str, hidden: bool) -> Result<Vec<String>, Error> {
-        debug!("Listing subkeys of {}, hidden: {}", key, hidden);
+        trace!("listing subkeys of {}, hidden: {}", key, hidden);
         let engine = get_engine!(self);
         let key = fmt_key(key);
         let mut result: Vec<String> = Vec::new();
@@ -1221,7 +1225,7 @@ impl Database {
         key: DataKey,
         extended_info: bool,
     ) -> Result<(Value, Option<KeyInfo>), Error> {
-        debug!("Getting key {:?}, extended_info: {}", key, extended_info);
+        trace!("getting key {:?}, extended_info: {}", key, extended_info);
         let engine = get_engine!(self);
         if key.is_name() {
             let key = fmt_key(key.get());
@@ -1229,7 +1233,7 @@ impl Database {
                 return Err(Error::new(ErrorKind::KeyNotFound, key));
             } else if !extended_info {
                 if let Some(v) = self.cache.get(&key) {
-                    debug!("Using cached value for {}", key);
+                    trace!("using cached value for {}", key);
                     return Ok((v.clone(), None));
                 }
             }
@@ -1323,16 +1327,16 @@ impl Database {
 
     #[allow(clippy::case_sensitive_file_extension_comparisons)]
     fn _purge(&mut self, keep_broken: bool) -> Result<Vec<String>, Error> {
-        debug!("Purge requested, keep_broken: {}", keep_broken);
+        trace!("purge requested, keep_broken: {}", keep_broken);
         let mut result: Vec<String> = Vec::new();
         let engine = get_engine!(self);
         let mut dts: Vec<String> = Vec::new();
         let path_len = self.key_path.len();
         let suffix = engine.get_suffix();
         let suffix_len = suffix.len();
-        debug!("Cleaning up trash");
+        trace!("cleaning up trash");
         fs::remove_dir_all(&self.trash_path)?;
-        debug!("Cleaning up files and broken keys");
+        trace!("cleaning up files and broken keys");
         // clean up files and broken keys
         for entry in glob(&(self.key_path.clone() + "/**/*"))? {
             match entry {
@@ -1363,11 +1367,11 @@ impl Database {
                     }
                 }
                 Err(e) => {
-                    error!("Error while browsing db directory: {}", e);
+                    error!("error while browsing db directory: {}", e);
                 }
             }
         }
-        debug!("Cleaning up directories");
+        trace!("cleaning up directories");
         // clean up directories
         let mut dirs: Vec<String> = Vec::new();
         for entry in glob(&(self.key_path.clone() + "/**"))? {
@@ -1400,7 +1404,7 @@ impl Database {
         fs::create_dir_all(&self.trash_path)?;
         self.cache.clear();
         sync_dir(&self.key_path)?;
-        debug!("Purge completed");
+        trace!("purge completed");
         Ok(result)
     }
 
@@ -1464,7 +1468,7 @@ impl Database {
     /// Will return Err on invalid property or value
     #[allow(clippy::cast_possible_truncation)]
     pub fn server_set(&mut self, name: &str, value: Value) -> Result<(), Error> {
-        debug!("Setting server option {}={}", name, value);
+        trace!("setting server option {}={}", name, value);
         macro_rules! invalid_server_option_value {
             ($n:expr, $value: expr) => {
                 return Err(Error::new(
@@ -1811,7 +1815,7 @@ impl Database {
     ///
     /// Will return Err if the key is not found or is unable to be copied
     pub fn key_copy(&mut self, key: &str, dst_key: &str) -> Result<(), Error> {
-        debug!("Copying key {} to {}", key, dst_key);
+        trace!("copying key {} to {}", key, dst_key);
         let value = self.get_key_data(DataKey::Name(key), false)?.0;
         self.set_key_data(dst_key, value, None, false)
     }
@@ -1820,7 +1824,7 @@ impl Database {
     ///
     /// Will return Err if the key is not found, is not numeric or I/O error occured
     pub fn key_increment(&mut self, key: &str) -> Result<i64, Error> {
-        debug!("Incrementing key {}", key);
+        trace!("incrementing key {}", key);
         let key = fmt_key(key);
         let mut value = match self.get_key_data(DataKey::Name(&key), false) {
             Ok(v) => match v.0.as_i64() {
@@ -1844,7 +1848,7 @@ impl Database {
     ///
     /// Will return Err if the key is not found, is not numeric or I/O error occured
     pub fn key_decrement(&mut self, key: &str) -> Result<i64, Error> {
-        debug!("Decrementing key {}", key);
+        trace!("decrementing key {}", key);
         let key = fmt_key(key);
         let mut value = match self.get_key_data(DataKey::Name(&key), false) {
             Ok(v) => match v.0.as_i64() {
@@ -1878,7 +1882,7 @@ impl Database {
         flush: bool,
         key_only: bool,
     ) -> Result<(), Error> {
-        debug!("Renaming key {} to {}", key, dst_key);
+        trace!("renaming key {} to {}", key, dst_key);
         let engine = get_engine!(self);
         let mut dts: Vec<String> = Vec::new();
         let key = fmt_key(key);
@@ -1990,7 +1994,7 @@ impl Database {
     /// Will panic on internal path errors
     #[allow(clippy::case_sensitive_file_extension_comparisons)]
     pub fn check(&mut self) -> Result<Vec<String>, Error> {
-        debug!("Checking the database");
+        trace!("checking the database");
         let engine = get_engine!(self);
         let mut broken: Vec<String> = Vec::new();
         let suffix = engine.get_suffix();
@@ -2003,17 +2007,17 @@ impl Database {
                         if self.get_key_data(DataKey::File(&key_file), false).is_err() {
                             let key =
                                 key_file[path_len + 1..key_file.rfind('.').unwrap()].to_string();
-                            debug!("Broken key found: {}", key);
+                            trace!("broken key found: {}", key);
                             broken.push(key);
                         }
                     } else if key_file.ends_with(".tmp") {
                         let key = key_file[path_len + 1..key_file.rfind('.').unwrap()].to_string();
-                        debug!("Lost key found: {}", key);
+                        trace!("lost key found: {}", key);
                         broken.push(key);
                     }
                 }
                 Err(e) => {
-                    error!("Error while browsing db directory: {}", e);
+                    error!("error while browsing db directory: {}", e);
                 }
             }
         }
@@ -2028,7 +2032,7 @@ impl Database {
     ///
     /// Will panic on internal path errors
     pub fn repair(&mut self) -> Result<Vec<(String, bool)>, Error> {
-        debug!("Repairing the database");
+        trace!("repairing the database");
         let engine = get_engine!(self);
         let mut result: Vec<(String, bool)> = Vec::new();
         let mut dts: Vec<String> = Vec::new();
@@ -2045,12 +2049,12 @@ impl Database {
                             &(key_file[..key_file.rfind('.').unwrap()].to_string() + &suffix),
                         )?;
                         let key = key_file[path_len + 1..key_file.rfind('.').unwrap()].to_string();
-                        debug!("Recovered lost key {}", key);
+                        trace!("recovered lost key {}", key);
                         result.push((key, true));
                     } else {
                         fs::remove_file(&key_file)?;
                         let key = key_file[path_len + 1..key_file.rfind('.').unwrap()].to_string();
-                        debug!("Deleted broken key {}", key);
+                        trace!("deleted broken key {}", key);
                         result.push((key, false));
                     }
                     if self.auto_flush {
@@ -2061,7 +2065,7 @@ impl Database {
                     }
                 }
                 Err(e) => {
-                    error!("Error while browsing db directory: {}", e);
+                    error!("error while browsing db directory: {}", e);
                 }
             }
         }
@@ -2073,7 +2077,7 @@ impl Database {
         for key in self._purge(false)? {
             result.push((key, false));
         }
-        debug!("Repair completed");
+        trace!("repair completed");
         self.repair_recommended = false;
         Ok(result)
     }
@@ -2082,11 +2086,11 @@ impl Database {
     ///
     /// Will return Err if keys are unable to be read
     pub fn key_dump(&mut self, key: &str) -> Result<Vec<(String, Value)>, Error> {
-        debug!("Dump requested for {}", key);
+        trace!("dump requested for {}", key);
         let mut result = Vec::new();
         for key in self.list_key_and_subkeys(key, true)? {
             if let Ok(v) = self.get_key_data(DataKey::Name(&key), false) {
-                debug!("Dumped key {}", key);
+                trace!("dumped key {}", key);
                 result.push((key, v.0));
             }
         }
@@ -2097,9 +2101,9 @@ impl Database {
     ///
     /// Will return Err if key is not found or unable to be read
     pub fn key_load(&mut self, data: Vec<(String, Value)>) -> Result<(), Error> {
-        debug!("Key load requested");
+        trace!("key load requested");
         for d in data {
-            debug!("Loading key {}", d.0);
+            trace!("loading key {}", d.0);
             self.set_key_data(&d.0, d.1, None, true)?;
         }
         Ok(())
