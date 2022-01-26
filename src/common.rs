@@ -5,7 +5,7 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::collections::HashMap;
 use std::convert::TryInto;
 
-use log::{debug, error};
+use log::{error, trace};
 
 const ERR_CODE_KEY_NOT_FOUND: i16 = -32001;
 const ERR_CODE_DATA: i16 = -32002;
@@ -196,7 +196,7 @@ pub struct Error {
 impl Error {
     pub fn new<E: std::fmt::Display>(kind: ErrorKind, error: E) -> Self {
         if kind == ErrorKind::KeyNotFound {
-            debug!("{} {}", kind, error);
+            trace!("{} {}", kind, error);
         } else {
             error!("error {} {}", kind, error);
         }
