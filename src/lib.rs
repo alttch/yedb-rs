@@ -24,7 +24,7 @@
 //! - YEDB is ultra-reliable, thread-safe and very easy to use.
 //! 
 //! - I don't like Rust
-//! - There are other [implementations](https://www.yedb.org).
+//! - There are other [implementations](https://yedb.bma.ai).
 //! 
 //! [![Power loss data survive
 //! demo](https://img.youtube.com/vi/i3hSWjrNqLo/0.jpg)](https://www.youtube.com/watch?v=i3hSWjrNqLo)
@@ -181,7 +181,7 @@
 //! 
 //! ## Specification
 //! 
-//! [www.yedb.org](https://www.yedb.org/)
+//! [yedb.bma.ai](https://yedb.bma.ai/)
 //! 
 //! ## Some benchmark data
 //! 
