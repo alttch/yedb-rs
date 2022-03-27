@@ -102,7 +102,7 @@
 //! 
 //! ### Embedded example
 //! 
-//! ```rust
+//! ```rust,ignore
 //! use yedb::Database;
 //! use serde_json::Value;
 //! 
@@ -118,7 +118,7 @@
 //! 
 //! ### TCP/Unix socket client example
 //! 
-//! ```rust
+//! ```rust,ignore
 //! use yedb::YedbClient;
 //! use serde_json::Value;
 //! 
@@ -131,7 +131,7 @@
 //! 
 //! ### Async TCP/Unix socket client example
 //! 
-//! ```rust
+//! ```rust,ignore
 //! use serde_json::Value;
 //! use yedb::{YedbClientAsync, YedbClientAsyncExt};
 //! 
@@ -146,7 +146,7 @@
 //! 
 //! ### Async TCP/Unix socket client pool example
 //! 
-//! ```rust
+//! ```rust,ignore
 //! use serde_json::Value;
 //! use std::sync::Arc;
 //! use std::time::Duration;
