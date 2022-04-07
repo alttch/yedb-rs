@@ -8,5 +8,8 @@ rustflags = ["-Clink-arg=-s"]
 linker = "arm-linux-gnueabihf-ld"
 rustflags = ["-Clink-arg=-s"]
 
+[target.armv7-unknown-linux-musleabihf]
+rustflags = ["-Clink-arg=-s"]
+
 [target.aarch64-unknown-linux-musl]
 rustflags = ["-Clink-arg=-s"]

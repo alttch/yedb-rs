@@ -1,4 +1,4 @@
-VERSION=0.3.1
+VERSION=0.3.6
 
 all: test
 
@@ -42,18 +42,15 @@ pkg:
 	rm -rf _build
 	mkdir -p _build
 	cross build --target x86_64-unknown-linux-musl --release --features server,cli
-	cross build --target i686-unknown-linux-musl --release --features server,cli
-	cross build --target arm-unknown-linux-musleabihf --release --features server,cli
+	cross build --target armv7-unknown-linux-musleabihf --release --features server,cli
 	cross build --target aarch64-unknown-linux-musl --release --features server,cli
 	cd target/x86_64-unknown-linux-musl/release && tar czvf ../../../_build/yedb-${VERSION}-x86_64-musl.tar.gz yedb-server yedb-cli
-	cd target/i686-unknown-linux-musl/release && tar czvf ../../../_build/yedb-${VERSION}-i686-musl.tar.gz yedb-server yedb-cli
-	cd target/arm-unknown-linux-musleabihf/release && tar czvf ../../../_build/yedb-${VERSION}-arm-musleabihf.tar.gz yedb-server yedb-cli
+	cd target/armv7-unknown-linux-musleabihf/release && tar czvf ../../../_build/yedb-${VERSION}-armv7-musleabihf.tar.gz yedb-server yedb-cli
 	cd target/aarch64-unknown-linux-musl/release && \
 			aarch64-linux-gnu-strip yedb-server && \
 			aarch64-linux-gnu-strip yedb-cli && \
 			tar czvf ../../../_build/yedb-${VERSION}-aarch64-musl.tar.gz yedb-server yedb-cli
 	cd _build && echo "" | gh release create v$(VERSION) -t "v$(VERSION)" \
-			yedb-${VERSION}-arm-musleabihf.tar.gz \
-			 yedb-${VERSION}-i686-musl.tar.gz \
+			yedb-${VERSION}-armv7-musleabihf.tar.gz \
 			 yedb-${VERSION}-x86_64-musl.tar.gz \
 			yedb-${VERSION}-aarch64-musl.tar.gz
