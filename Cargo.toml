@@ -40,7 +40,7 @@ log = "0.4.14"
 fs_extra = "1.2.0"
 openssl = { version = "0.10.29", features = ["vendored"] }
 #byteorder = "1.4.2"
-jsonschema = { version = "0.4.3", features = [] }
+jsonschema = { version = "0.16.0", features = [] }
 syslog = { version = "5.0.0", optional = true }
 chrono = { version = "0.4.19", optional = true }
 colored = { version = "2", optional = true }

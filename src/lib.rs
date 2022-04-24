@@ -373,8 +373,8 @@ impl_err_data!(serde_json::Error);
 impl_err_data!(serde_yaml::Error);
 impl_err_data!(hex::FromHexError);
 
-impl From<jsonschema::CompilationError> for Error {
-    fn from(e: jsonschema::CompilationError) -> Self {
+impl<'a> From<jsonschema::ValidationError<'a>> for Error {
+    fn from(e: jsonschema::ValidationError<'a>) -> Self {
         Error::new(ErrorKind::SchemaValidationError, e)
     }
 }
