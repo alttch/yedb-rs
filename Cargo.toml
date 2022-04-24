@@ -1,6 +1,6 @@
 [package]
 name = "yedb"
-version = "0.4.1"
+version = "0.4.2"
 authors = ["Sergei S. <div@altertech.com>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -11,10 +11,10 @@ keywords = ["database", "server", "client", "key-value"]
 autoexamples = false
 
 [package.metadata.docs.rs]
-features = ["client-sync", "client-async"]
+features = ["client-sync", "client-async", "client-local-async", "client-elbus-async"]
 
 [package.metadata.playground]
-features = ["client-sync", "client-async"]
+features = ["client-sync", "client-async", "client-local-async", "client-elbus-async"]
 
 [lib]
 name = "yedb"
