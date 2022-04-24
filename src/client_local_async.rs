@@ -15,6 +15,7 @@ impl YedbClientLocalAsync {
     pub fn open(path: &str, timeout: Duration) -> Result<Self, Error> {
         let mut db = Database::new();
         db.timeout = timeout;
+        db.auto_repair = false;
         db.set_db_path(path)?;
         db.open()?;
         Ok(Self {
