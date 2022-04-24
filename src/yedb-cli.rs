@@ -1,24 +1,19 @@
+use chrono::{DateTime, Local};
+use colored::Colorize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-
 use std::env;
 use std::fmt;
 use std::fs;
-use std::process;
-
 use std::io::{self, Read};
+use std::process;
 use std::sync::atomic;
 use std::sync::Arc;
-
-use colored::Colorize;
 use std::time::{Duration, SystemTime};
-
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
-use chrono::{DateTime, Local};
 use yedb::{
     Error, ErrorKind, SerializationEngine, YedbClientAsync, YedbClientAsyncExt,
-    YedbClientElbusAsync, ENGINE_VERSION, VERSION,
+    YedbClientElbusAsync, YedbClientLocalAsync, ENGINE_VERSION, VERSION,
 };
 
 use clap::Clap;
@@ -55,7 +50,12 @@ impl fmt::Display for BenchmarkOp {
 #[allow(clippy::cast_precision_loss)]
 #[allow(clippy::cast_possible_truncation)]
 #[allow(clippy::cast_sign_loss)]
-async fn benchmark(db: &mut Box<dyn YedbClientAsyncExt>, path: &str, nt: u32, iterations: u32) {
+async fn benchmark(
+    db: &mut Box<dyn YedbClientAsyncExt>,
+    path: &str,
+    nt: u32,
+    iterations: u32,
+) -> Result<(), Error> {
     let i = db.info().await.unwrap();
     let old_cache_size = i.cache_size;
     db.key_delete_recursive(".benchmark").await.unwrap();
@@ -91,8 +91,8 @@ async fn benchmark(db: &mut Box<dyn YedbClientAsyncExt>, path: &str, nt: u32, it
                 let op_value = op.1;
                 let db_path = path.to_owned();
                 let errs = errors.clone();
+                let mut session = create_client(&db_path, thread_no + 1).await?;
                 let t = tokio::spawn(async move {
-                    let mut session = create_client(&db_path, thread_no + 1).await;
                     for x in 0..(iterations / nt) {
                         let key_name = format!(".benchmark/t{}/{}_{}", thread_no, &op_name, x);
                         if match bm_op {
@@ -124,8 +124,8 @@ async fn benchmark(db: &mut Box<dyn YedbClientAsyncExt>, path: &str, nt: u32, it
     for thread_no in 0..nt {
         let db_path = path.to_owned();
         let errs = errors.clone();
+        let mut session = create_client(&db_path, thread_no + 1).await?;
         let t = tokio::spawn(async move {
-            let mut session = create_client(&db_path, thread_no + 1).await;
             let key_name = format!(".benchmark/incr/increment_{}", thread_no);
             for _ in 0..(iterations / nt) {
                 if session.key_increment(&key_name).await.is_err() {
@@ -146,6 +146,7 @@ async fn benchmark(db: &mut Box<dyn YedbClientAsyncExt>, path: &str, nt: u32, it
         .await
         .unwrap();
     staged_benchmark_print!();
+    Ok(())
 }
 
 #[derive(Clap)]
@@ -153,7 +154,7 @@ struct Opts {
     #[clap(
         short = 'C',
         long = "connect",
-        about = "path to socket or tcp://host:port or elbus://<ELBUS_PATH>:<ELBUS_TARGET>",
+        about = "path to database dir or socket (must end with .sock, .socket or .ipc) or tcp://host:port or elbus://<ELBUS_PATH>:<ELBUS_TARGET>",
         default_value = "tcp://127.0.0.1:8870"
     )]
     path: String,
@@ -595,9 +596,9 @@ fn _format_debug_value(value: &Value) -> String {
     let s: String = match value {
         Value::String(s) => s
             .to_string()
-            .replace("\n", "")
-            .replace("\r", "")
-            .replace("\t", " "),
+            .replace('\n', "")
+            .replace('\r', "")
+            .replace('\t', " "),
         _ => value.to_string(),
     };
     if s.len() > 79 {
@@ -734,7 +735,7 @@ async fn load_dump(
                 let data_len = u32::from_le_bytes([buf[0], buf[1], buf[2], buf[3]]);
                 let mut buf = vec![0_u8; data_len as usize];
                 f.read_exact(&mut buf).await?;
-                data_buf.push(match rmp_serde::from_read_ref(&buf) {
+                data_buf.push(match rmp_serde::from_slice(&buf) {
                     Ok(v) => v,
                     Err(e) => {
                         return Err(Error::new(ErrorKind::DataError, e));
@@ -783,7 +784,11 @@ fn convert_bool(value: Option<bool>, mode: ConvertBools) -> String {
     }
 }
 
-async fn create_client(path: &str, id: u32) -> Box<dyn YedbClientAsyncExt + Send + 'static> {
+#[allow(clippy::case_sensitive_file_extension_comparisons)]
+async fn create_client(
+    path: &str,
+    id: u32,
+) -> Result<Box<dyn YedbClientAsyncExt + Send + 'static>, Error> {
     if let Some(elbus_path) = path.strip_prefix("elbus://") {
         let mut sp = elbus_path.rsplitn(2, ':');
         let target = sp.next().unwrap();
@@ -793,13 +798,22 @@ async fn create_client(path: &str, id: u32) -> Box<dyn YedbClientAsyncExt + Send
             .await
             .unwrap();
         let rpc = elbus::rpc::RpcClient::new(client, elbus::rpc::DummyHandlers {});
-        Box::new(YedbClientElbusAsync::new(
+        Ok(Box::new(YedbClientElbusAsync::new(
             Arc::new(rpc),
             target,
             elbus::QoS::RealtimeProcessed,
-        ))
+        )))
+    } else if path.starts_with("tcp://")
+        || path.ends_with(".sock")
+        || path.ends_with(".socket")
+        || path.ends_with(".ipc")
+    {
+        Ok(Box::new(YedbClientAsync::new(path)))
     } else {
-        Box::new(YedbClientAsync::new(path))
+        Ok(Box::new(YedbClientLocalAsync::open(
+            path,
+            Duration::from_secs(5),
+        )?))
     }
 }
 
@@ -807,7 +821,7 @@ async fn create_client(path: &str, id: u32) -> Box<dyn YedbClientAsyncExt + Send
 #[tokio::main(worker_threads = 1)]
 async fn main() {
     let opts: Opts = Opts::parse();
-    let mut db: Box<dyn YedbClientAsyncExt> = create_client(&opts.path, 0).await;
+    let mut db: Box<dyn YedbClientAsyncExt> = create_client(&opts.path, 0).await.unwrap();
     let exit_code = match opts.cmd {
         Cmd::Version => {
             println!("{} : {}", "yedb-rs".blue().bold(), VERSION.yellow());
@@ -833,7 +847,9 @@ async fn main() {
             }
         },
         Cmd::Benchmark(c) => {
-            benchmark(&mut db, &opts.path, c.workers, c.iterations).await;
+            benchmark(&mut db, &opts.path, c.workers, c.iterations)
+                .await
+                .unwrap();
             0
         }
         Cmd::Server(c) => output_result_ok(server_set_prop(&mut db, &c.prop, c.value).await),
@@ -880,7 +896,7 @@ async fn main() {
                             println!(
                                 "{}{}={}",
                                 &pfx,
-                                name.replace("-", "_").replace(".", "_").to_uppercase(),
+                                name.replace('-', "_").replace('.', "_").to_uppercase(),
                                 match value {
                                     Value::Array(a) => {
                                         let mut result = String::new();

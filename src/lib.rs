@@ -292,6 +292,12 @@ pub mod client_elbus_async;
 #[cfg(feature = "client-elbus-async")]
 pub use client_elbus_async::YedbClientElbusAsync;
 
+#[cfg(feature = "client-local-async")]
+#[path = "client_local_async.rs"]
+pub mod client_local_async;
+#[cfg(feature = "client-local-async")]
+pub use client_local_async::YedbClientLocalAsync;
+
 #[cfg(any(feature = "server", feature = "server-embed"))]
 #[path = "server.rs"]
 pub mod server;
@@ -480,7 +486,7 @@ impl SerializationEngine {
     /// Will return errors on deserialization errors
     pub fn deserialize(&self, buf: &[u8]) -> Result<Value, Error> {
         Ok(match self {
-            SerializationEngine::Msgpack => rmp_serde::from_read_ref(buf)?,
+            SerializationEngine::Msgpack => rmp_serde::from_slice(buf)?,
             SerializationEngine::Cbor => serde_cbor::from_slice(buf)?,
             SerializationEngine::Json => serde_json::from_slice(buf)?,
             SerializationEngine::Yaml => serde_yaml::from_slice(buf)?,
@@ -1118,7 +1124,7 @@ impl Database {
             let trashed = format!(
                 "{}/{}.{}",
                 self.trash_path.clone(),
-                key.replace("/", "_"),
+                key.replace('/', "_"),
                 timestamp_ns!()
             );
             trace!("renaming dir {} to {}", &dn, &trashed);
@@ -1153,7 +1159,7 @@ impl Database {
             let trashed = format!(
                 "{}/{}.{}{}",
                 self.trash_path.clone(),
-                key.replace("/", "_"),
+                key.replace('/', "_"),
                 timestamp_ns!(),
                 engine.get_suffix()
             );

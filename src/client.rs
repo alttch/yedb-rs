@@ -109,12 +109,11 @@ impl YedbClient {
         if let Some(ref mut v) = self.stream {
             Ok(v)
         } else {
-            let mut stream: ClientStream;
-            if self.path.starts_with("tcp://") {
-                stream = ClientStream::Tcp(TcpStream::connect(&self.path[6..])?);
+            let mut stream: ClientStream = if self.path.starts_with("tcp://") {
+                ClientStream::Tcp(TcpStream::connect(&self.path[6..])?)
             } else {
-                stream = ClientStream::Unix(UnixStream::connect(&self.path)?);
-            }
+                ClientStream::Unix(UnixStream::connect(&self.path)?)
+            };
             stream.set_timeout(self.timeout)?;
             self.stream = Some(stream);
             Ok(self.stream.as_mut().unwrap())
@@ -160,7 +159,7 @@ impl YedbClient {
         let frame_len = u32::from_le_bytes([buf[2], buf[3], buf[4], buf[5]]) as usize;
         let mut buf = vec![0_u8; frame_len];
         stream.read_exact(&mut buf)?;
-        let response: JSONRpcResponse<Value> = rmp_serde::from_read_ref(&buf)?;
+        let response: JSONRpcResponse<Value> = rmp_serde::from_slice(&buf)?;
         if response.id != req.id {
             return Err(Error::new(ErrorKind::ProtocolError, "invalid response id"));
         }

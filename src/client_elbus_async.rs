@@ -25,7 +25,7 @@ macro_rules! do_call {
             .rpc
             .call(&$self.target, $method, $payload, $self.qos)
             .await?;
-        rmp_serde::from_read_ref(&result.payload()).map_err(Into::<Error>::into)
+        rmp_serde::from_slice(&result.payload()).map_err(Into::<Error>::into)
     }};
 }
 

@@ -21,15 +21,9 @@ pub fn create_db() -> Arc<RwLock<Database>> {
 }
 
 #[cfg(feature = "elbus-rpc")]
+#[derive(Default)]
 pub struct ElbusApi {
     db: Arc<RwLock<Database>>,
-}
-
-#[cfg(feature = "elbus-rpc")]
-impl Default for ElbusApi {
-    fn default() -> Self {
-        Self { db: <_>::default() }
-    }
 }
 
 #[cfg(feature = "elbus-rpc")]
@@ -54,20 +48,18 @@ impl RpcHandlers for ElbusApi {
         let params: HashMap<String, Value> = if payload.is_empty() {
             HashMap::new()
         } else {
-            rmp_serde::from_read_ref(event.payload())?
+            rmp_serde::from_slice(event.payload())?
         };
         let id = event.id();
         let request = JSONRpcRequest::with_params(id.into(), method, params);
         match process_request(&self.db, request).await {
             Ok(v) => {
-                if id != 0 {
-                    if let Some(e) = v.error {
-                        Err(RpcError::new(e.kind() as i16, rpc_err_str(e.get_message())))
-                    } else if let Some(payload) = v.result {
-                        Ok(Some(rmp_serde::to_vec_named(&payload)?))
-                    } else {
-                        Ok(None)
-                    }
+                if id == 0 {
+                    Ok(None)
+                } else if let Some(e) = v.error {
+                    Err(RpcError::new(e.kind() as i16, rpc_err_str(e.get_message())))
+                } else if let Some(payload) = v.result {
+                    Ok(Some(rmp_serde::to_vec_named(&payload)?))
                 } else {
                     Ok(None)
                 }

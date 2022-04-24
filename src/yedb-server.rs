@@ -284,9 +284,9 @@ async fn run_server(bind_to: &str, pidfile: &str) {
 }
 
 macro_rules! parse_request_meta {
-    ($s:expr, $b:expr, $l:expr) => {
-        match $s.read_exact(&mut $b).await {
-            Ok(_) => $l = u32::from_le_bytes([$b[2], $b[3], $b[4], $b[5]]) as usize,
+    ($s:expr, $b:expr) => {{
+        let frame_len = match $s.read_exact(&mut $b).await {
+            Ok(_) => u32::from_le_bytes([$b[2], $b[3], $b[4], $b[5]]) as usize,
             Err(ref e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
                 break;
             }
@@ -295,18 +295,19 @@ macro_rules! parse_request_meta {
                 break;
             }
         };
-        if $b[0] != yedb::ENGINE_VERSION || $b[1] != 2 || $l == 0 {
+        if $b[0] != yedb::ENGINE_VERSION || $b[1] != 2 || frame_len == 0 {
             debug!("Invalid packet");
             break;
         };
-    };
+        frame_len
+    }};
 }
 
 macro_rules! handle_request {
     ($s:expr, $b:expr) => {
         match $s.read_exact(&mut $b).await {
             Ok(_) => {
-                let request: JSONRpcRequest = match rmp_serde::from_read_ref(&$b) {
+                let request: JSONRpcRequest = match rmp_serde::from_slice(&$b) {
                     Ok(v) => v,
                     Err(e) => {
                         error!("API decode error {}", e);
@@ -352,8 +353,7 @@ macro_rules! handle_request {
 async fn unix_worker(stream: &mut UnixStream) {
     loop {
         let mut buf = [0_u8; 6];
-        let frame_len: usize;
-        parse_request_meta!(stream, buf, frame_len);
+        let frame_len: usize = parse_request_meta!(stream, buf);
         let mut buf: Vec<u8> = vec![0; frame_len];
 
         handle_request!(stream, buf);
@@ -363,8 +363,7 @@ async fn unix_worker(stream: &mut UnixStream) {
 async fn tcp_worker(stream: &mut TcpStream) {
     loop {
         let mut buf = [0_u8; 6];
-        let frame_len: usize;
-        parse_request_meta!(stream, buf, frame_len);
+        let frame_len: usize = parse_request_meta!(stream, buf);
         let mut buf: Vec<u8> = vec![0; frame_len];
 
         handle_request!(stream, buf);

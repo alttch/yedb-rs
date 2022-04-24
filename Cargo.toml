@@ -1,6 +1,6 @@
 [package]
 name = "yedb"
-version = "0.3.6"
+version = "0.4.0"
 authors = ["Sergei S. <div@altertech.com>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -56,10 +56,11 @@ async-trait = { version = "0.1.51", optional = true }
 [features]
 server = ["syslog", "chrono", "colored", "clap", "tokio" ]
 cli = ["chrono", "colored", "clap", "prettytable-rs", "getch", "bma-benchmark",
-      "tokio", "client-async", "client-elbus-async" ]
+      "tokio", "client-async", "client-elbus-async", "client-local-async" ]
 client-sync = []
 client-async = [ "tokio", "simple-pool", "async-trait" ]
 client-elbus-async = ["elbus", "client-async", "async-trait"]
+client-local-async = ["tokio", "client-async", "async-trait"]
 elbus-rpc = ["async-trait", "elbus"]
 server-embed = ["tokio"]
 
