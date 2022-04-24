@@ -233,7 +233,7 @@ use log::{error, trace, warn};
 extern crate lazy_static;
 
 pub const SERVER_ID: &str = "yedb-altt-rs";
-pub const VERSION: &str = "0.3.1";
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const ENGINE_VERSION: u8 = 1;
 
 pub const DEFAULT_CACHE_SIZE: usize = 1000;

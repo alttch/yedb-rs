@@ -1,4 +1,4 @@
-VERSION=0.4.0
+VERSION=$(shell grep ^version Cargo.toml|cut -d\" -f2)
 
 all: test
 
@@ -19,10 +19,6 @@ clean:
 tag:
 	git tag -a v${VERSION} -m v${VERSION}
 	git push origin --tags
-
-ver:
-	sed -i 's/^version = ".*/version = "${VERSION}"/g' Cargo.toml
-	sed -i 's/^pub const VERSION:.*/pub const VERSION: \&str = "${VERSION}";/g' src/lib.rs
 
 doc:
 	grep -v "^//!" src/lib.rs > src/lib.rs.tmp
