@@ -1,6 +1,6 @@
 [package]
 name = "yedb"
-version = "0.4.5"
+version = "0.4.6"
 authors = ["Sergei S. <div@altertech.com>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -31,7 +31,7 @@ rmp-serde = "1.0.0"
 rmpv = "0.4.6"
 sha2 = "0.9.2"
 fs2 = "0.4.3"
-lru = "0.6.3"
+lru = "0.7.1"
 glob = "0.3.0"
 lazy_static = "1.4.0"
 regex = "1"
