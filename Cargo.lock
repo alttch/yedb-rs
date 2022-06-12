@@ -372,9 +372,9 @@ dependencies = [
 
 [[package]]
 name = "elbus"
-version = "0.2.5"
+version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e36406f94f77c671b552dd3245cc35c79e966802b65ac38e89be5c4e1a59120d"
+checksum = "8ed175132c9f3e90c0963d9437e09078981ef393331aa7ca168dc03e75459bfb"
 dependencies = [
  "async-channel",
  "async-trait",
@@ -2028,7 +2028,7 @@ dependencies = [
 
 [[package]]
 name = "yedb"
-version = "0.4.6"
+version = "0.4.7"
 dependencies = [
  "async-trait",
  "bma-benchmark",
