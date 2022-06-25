@@ -82,3 +82,9 @@ path = "examples/embed.rs"
 name = "client"
 path = "examples/client.rs"
 required-features = ["client-sync"]
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+
