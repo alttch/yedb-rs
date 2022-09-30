@@ -1,6 +1,6 @@
 [package]
 name = "yedb"
-version = "0.4.7"
+version = "0.4.8"
 authors = ["Sergei S. <div@altertech.com>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -11,10 +11,10 @@ keywords = ["database", "server", "client", "key-value"]
 autoexamples = false
 
 [package.metadata.docs.rs]
-features = ["client-sync", "client-async", "client-local-async", "client-elbus-async"]
+features = ["client-sync", "client-async", "client-local-async", "client-busrt-async"]
 
 [package.metadata.playground]
-features = ["client-sync", "client-async", "client-local-async", "client-elbus-async"]
+features = ["client-sync", "client-async", "client-local-async", "client-busrt-async"]
 
 [lib]
 name = "yedb"
@@ -50,18 +50,18 @@ getch = { version = "0.3.1", optional = true }
 prettytable-rs = { version = "0.8.0", optional = true }
 simple-pool = { version = "0.0.9", optional = true }
 bma-benchmark = { version = "=0.0.16", optional = true }
-elbus = { version = "0.2.7", optional = true, features = ["rpc", "ipc"] }
+busrt = { version = "0.3", optional = true, features = ["rpc", "ipc"] }
 async-trait = { version = "0.1.51", optional = true }
 
 [features]
 server = ["syslog", "chrono", "colored", "clap", "tokio" ]
 cli = ["chrono", "colored", "clap", "prettytable-rs", "getch", "bma-benchmark",
-      "tokio", "client-async", "client-elbus-async", "client-local-async" ]
+      "tokio", "client-async", "client-busrt-async", "client-local-async" ]
 client-sync = []
 client-async = [ "tokio", "simple-pool", "async-trait" ]
-client-elbus-async = ["elbus", "client-async", "async-trait"]
+client-busrt-async = ["busrt", "client-async", "async-trait"]
 client-local-async = ["tokio", "client-async", "async-trait"]
-elbus-rpc = ["async-trait", "elbus"]
+busrt-rpc = ["async-trait", "busrt"]
 server-embed = ["tokio"]
 
 [[bin]]

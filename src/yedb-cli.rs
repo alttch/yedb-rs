@@ -13,7 +13,7 @@ use std::time::{Duration, SystemTime};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use yedb::{
     Error, ErrorKind, SerializationEngine, YedbClientAsync, YedbClientAsyncExt,
-    YedbClientElbusAsync, YedbClientLocalAsync, ENGINE_VERSION, VERSION,
+    YedbClientBusRtAsync, YedbClientLocalAsync, ENGINE_VERSION, VERSION,
 };
 
 use clap::Clap;
@@ -154,7 +154,7 @@ struct Opts {
     #[clap(
         short = 'C',
         long = "connect",
-        about = "path to database dir or socket (must end with .sock, .socket or .ipc) or tcp://host:port or elbus://<ELBUS_PATH>:<ELBUS_TARGET>",
+        about = "path to database dir or socket (must end with .sock, .socket or .ipc) or tcp://host:port or rt://<BUS_PATH>:<BUS_TARGET> for BUS/RT",
         default_value = "tcp://127.0.0.1:8870"
     )]
     path: String,
@@ -789,19 +789,19 @@ async fn create_client(
     path: &str,
     id: u32,
 ) -> Result<Box<dyn YedbClientAsyncExt + Send + 'static>, Error> {
-    if let Some(elbus_path) = path.strip_prefix("elbus://") {
-        let mut sp = elbus_path.rsplitn(2, ':');
+    if let Some(busrt_path) = path.strip_prefix("rt://") {
+        let mut sp = busrt_path.rsplitn(2, ':');
         let target = sp.next().unwrap();
-        let path = sp.next().expect("no elbus target specified");
+        let path = sp.next().expect("no busrt target specified");
         let me = format!("yedb-cli-{}-{}", std::process::id(), id);
-        let client = elbus::ipc::Client::connect(&elbus::ipc::Config::new(path, &me))
+        let client = busrt::ipc::Client::connect(&busrt::ipc::Config::new(path, &me))
             .await
             .unwrap();
-        let rpc = elbus::rpc::RpcClient::new(client, elbus::rpc::DummyHandlers {});
-        Ok(Box::new(YedbClientElbusAsync::new(
+        let rpc = busrt::rpc::RpcClient::new(client, busrt::rpc::DummyHandlers {});
+        Ok(Box::new(YedbClientBusRtAsync::new(
             Arc::new(rpc),
             target,
-            elbus::QoS::RealtimeProcessed,
+            busrt::QoS::RealtimeProcessed,
         )))
     } else if path.starts_with("tcp://")
         || path.ends_with(".sock")

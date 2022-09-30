@@ -237,9 +237,9 @@ impl std::fmt::Display for Error {
     }
 }
 
-#[cfg(feature = "client-elbus-async")]
-impl From<elbus::rpc::RpcError> for Error {
-    fn from(err: elbus::rpc::RpcError) -> Error {
+#[cfg(feature = "client-busrt-async")]
+impl From<busrt::rpc::RpcError> for Error {
+    fn from(err: busrt::rpc::RpcError) -> Error {
         let code = err.code();
         Error::new(
             code.into(),

@@ -286,11 +286,11 @@ pub mod client_async;
 #[cfg(feature = "client-async")]
 pub use client_async::{YedbClientAsync, YedbClientAsyncExt, YedbClientPoolAsync};
 
-#[cfg(feature = "client-elbus-async")]
-#[path = "client_elbus_async.rs"]
-pub mod client_elbus_async;
-#[cfg(feature = "client-elbus-async")]
-pub use client_elbus_async::YedbClientElbusAsync;
+#[cfg(feature = "client-busrt-async")]
+#[path = "client_busrt_async.rs"]
+pub mod client_busrt_async;
+#[cfg(feature = "client-busrt-async")]
+pub use client_busrt_async::YedbClientBusRtAsync;
 
 #[cfg(feature = "client-local-async")]
 #[path = "client_local_async.rs"]

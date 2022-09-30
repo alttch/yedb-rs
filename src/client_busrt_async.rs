@@ -2,15 +2,15 @@ use serde_json::Value;
 
 use super::common::{DBInfo, Error, KeyExplained};
 
-use elbus::rpc::Rpc;
-use elbus::QoS;
+use busrt::rpc::Rpc;
+use busrt::QoS;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use crate::YedbClientAsyncExt;
 
 #[allow(clippy::module_name_repetitions)]
-pub struct YedbClientElbusAsync<R>
+pub struct YedbClientBusRtAsync<R>
 where
     R: Rpc + Send + Sync,
 {
@@ -38,11 +38,11 @@ macro_rules! call {
         do_call!($self, $method, rmp_serde::to_vec_named(&params)?.into())
     }};
     ($self: expr, $method: expr) => {{
-        do_call!($self, $method, elbus::empty_payload!())
+        do_call!($self, $method, busrt::empty_payload!())
     }};
 }
 
-impl<R> YedbClientElbusAsync<R>
+impl<R> YedbClientBusRtAsync<R>
 where
     R: Rpc + Send + Sync,
 {
@@ -57,7 +57,7 @@ where
 
 #[allow(clippy::useless_vec)]
 #[async_trait::async_trait]
-impl<R> YedbClientAsyncExt for YedbClientElbusAsync<R>
+impl<R> YedbClientAsyncExt for YedbClientBusRtAsync<R>
 where
     R: Rpc + Send + Sync,
 {

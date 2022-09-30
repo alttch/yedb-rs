@@ -3,16 +3,16 @@ use crate::Database;
 use crate::Error;
 use log::trace;
 use serde_json::{json, Value};
-#[cfg(feature = "elbus-rpc")]
+#[cfg(feature = "busrt-rpc")]
 use std::collections::HashMap;
 #[cfg(any(feature = "server-embed", feature = "server"))]
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-#[cfg(feature = "elbus-rpc")]
-use elbus::rpc::{rpc_err_str, RpcError, RpcEvent, RpcHandlers, RpcResult};
-#[cfg(feature = "elbus-rpc")]
-use elbus::Frame;
+#[cfg(feature = "busrt-rpc")]
+use busrt::rpc::{rpc_err_str, RpcError, RpcEvent, RpcHandlers, RpcResult};
+#[cfg(feature = "busrt-rpc")]
+use busrt::Frame;
 
 #[cfg(any(feature = "server-embed", feature = "server"))]
 #[inline]
@@ -20,14 +20,14 @@ pub fn create_db() -> Arc<RwLock<Database>> {
     <_>::default()
 }
 
-#[cfg(feature = "elbus-rpc")]
+#[cfg(feature = "busrt-rpc")]
 #[derive(Default)]
-pub struct ElbusApi {
+pub struct BusRtApi {
     db: Arc<RwLock<Database>>,
 }
 
-#[cfg(feature = "elbus-rpc")]
-impl ElbusApi {
+#[cfg(feature = "busrt-rpc")]
+impl BusRtApi {
     pub fn new(db: Arc<RwLock<Database>>) -> Self {
         Self { db }
     }
@@ -37,9 +37,9 @@ impl ElbusApi {
     }
 }
 
-#[cfg(feature = "elbus-rpc")]
+#[cfg(feature = "busrt-rpc")]
 #[async_trait::async_trait]
-impl RpcHandlers for ElbusApi {
+impl RpcHandlers for BusRtApi {
     async fn handle_notification(&self, _event: RpcEvent) {}
     async fn handle_frame(&self, _frame: Frame) {}
     async fn handle_call(&self, event: RpcEvent) -> RpcResult {
