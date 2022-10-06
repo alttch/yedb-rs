@@ -209,9 +209,9 @@ checksum = "c1ad822118d20d2c234f427000d5acc36eabe1e29a348c89b63dd60b13f28e5d"
 
 [[package]]
 name = "busrt"
-version = "0.3.4"
+version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e456ed95dd6bc85461e7c5b8200d0179233ceec6c30d63c3a19b603d465675d"
+checksum = "0f1fee5f235703f8f7303e17281d8d163da32889f19dcb2584d8ad15a230c1f6"
 dependencies = [
  "async-channel",
  "async-io",
@@ -2010,7 +2010,7 @@ dependencies = [
 
 [[package]]
 name = "yedb"
-version = "0.4.10"
+version = "0.4.11"
 dependencies = [
  "async-trait",
  "bma-benchmark",
