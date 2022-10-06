@@ -22,7 +22,7 @@ tag:
 
 release: tag pkg
 
-pub: doc test publish-cargo-crate
+pub: test publish-cargo-crate
 
 publish-cargo-crate:
 	cargo publish
