@@ -1,7 +1,7 @@
 use chrono::{DateTime, Local};
 use colored::Colorize;
+use openssl::sha::Sha256;
 use serde_json::Value;
-use sha2::{Digest, Sha256};
 use std::env;
 use std::fmt;
 use std::fs;
@@ -478,8 +478,8 @@ macro_rules! output_editor_error {
 async fn edit_key(db: &mut Box<dyn YedbClientAsyncExt>, key: &str, value: Option<&Value>) -> i32 {
     let mut code = 0;
     let mut hasher = Sha256::new();
-    hasher.update(&key);
-    let digest = hasher.finalize();
+    hasher.update(key.as_bytes());
+    let digest = hasher.finish();
     let temp_file_name = format!(
         "{}/yedb-{}.yml",
         env::var("TEMP").unwrap_or_else(|_| env::var("TMP").unwrap_or_else(|_| "/tmp".to_owned())),

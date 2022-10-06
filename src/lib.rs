@@ -3,10 +3,10 @@ use fs2::FileExt;
 use glob::glob;
 use jsonschema::{Draft, JSONSchema};
 use lru::LruCache;
+use openssl::sha::Sha256;
 use regex::Regex;
 use serde::{de::Error as deError, Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
-use sha2::{Digest, Sha256};
 use std::fmt;
 use std::fs;
 use std::io;
@@ -821,7 +821,7 @@ impl Database {
         let content = engine.se.unwrap().serialize(&value)?;
         let mut hasher = Sha256::new();
         hasher.update(&content);
-        let digest = hasher.finalize();
+        let digest = hasher.finish();
         let mut file = fs::File::create(&temp_file)?;
         let is_binary = engine.is_serialization_binary();
         if engine.checksums {
@@ -1059,16 +1059,16 @@ impl Database {
             } else {
                 hasher.update(&buf[82..buf.len()]);
             }
-            let digest = hasher.finalize();
-            if (is_binary && *digest != buf[0..32])
-                || (!is_binary && *digest != *hex::decode(&buf[0..64])?.as_slice())
+            let digest = hasher.finish();
+            if (is_binary && digest != buf[0..32])
+                || (!is_binary && digest != *hex::decode(&buf[0..64])?.as_slice())
             {
                 return Err(Error::new(
                     ErrorKind::DataError,
                     format!("checksum does not match: {}", key_file),
                 ));
             }
-            checksum = Some(digest.into());
+            checksum = Some(digest);
             if is_binary {
                 stime = Some(u64::from_le_bytes([
                     buf[32], buf[33], buf[34], buf[35], buf[36], buf[37], buf[38], buf[39],
