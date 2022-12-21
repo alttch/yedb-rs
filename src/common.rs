@@ -339,7 +339,7 @@ impl JSONRpcRequest {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct JSONRpcResponse<T: Serialize> {
+pub struct JSONRpcResponse<T> {
     jsonrpc: String,
     pub id: Value,
     #[serde(skip_serializing_if = "Option::is_none")]

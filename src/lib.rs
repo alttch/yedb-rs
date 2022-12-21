@@ -385,7 +385,7 @@ fn lock_ex(fh: &fs::File, timeout: Duration) -> Result<bool, Error> {
             Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                 locked_instantly = false;
                 std::thread::sleep(SLEEP_STEP);
-                if Instant::now() - start > timeout {
+                if start.elapsed() > timeout {
                     return Err(Error::new(ErrorKind::TimeoutError, "lock timeout"));
                 }
                 continue;
@@ -828,7 +828,7 @@ impl Database {
             if is_binary {
                 file.write_all(&digest)?;
             } else {
-                file.write_all(hex::encode(&digest).as_bytes())?;
+                file.write_all(hex::encode(digest).as_bytes())?;
                 file.write_all(&[0x0A_u8])?;
             }
             let stime = match stime {
@@ -838,7 +838,7 @@ impl Database {
             if is_binary {
                 file.write_all(&stime.to_le_bytes())?;
             } else {
-                file.write_all(hex::encode(&stime.to_le_bytes()).as_bytes())?;
+                file.write_all(hex::encode(stime.to_le_bytes()).as_bytes())?;
                 file.write_all(&[0x0A_u8])?;
             }
         }
@@ -1711,7 +1711,7 @@ impl Database {
         // rename file
         let mut options = fs_extra::file::CopyOptions::new();
         options.overwrite = true;
-        match fs_extra::file::move_file(&key_file, &dst_key_file, &options) {
+        match fs_extra::file::move_file(&key_file, dst_key_file, &options) {
             Ok(_) => {
                 renamed = true;
                 if let Some(v) = self.cache.pop(&key) {
@@ -1840,7 +1840,7 @@ impl Database {
                     if self.get_key_data(DataKey::File(&key_file), false).is_ok() {
                         fs::rename(
                             &key_file,
-                            &(key_file[..key_file.rfind('.').unwrap()].to_string() + &suffix),
+                            key_file[..key_file.rfind('.').unwrap()].to_string() + &suffix,
                         )?;
                         let key = key_file[path_len + 1..key_file.rfind('.').unwrap()].to_string();
                         trace!("recovered lost key {}", key);
