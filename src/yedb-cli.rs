@@ -483,7 +483,7 @@ async fn edit_key(db: &mut Box<dyn YedbClientAsyncExt>, key: &str, value: Option
     let temp_file_name = format!(
         "{}/yedb-{}.yml",
         env::var("TEMP").unwrap_or_else(|_| env::var("TMP").unwrap_or_else(|_| "/tmp".to_owned())),
-        hex::encode(&digest)
+        hex::encode(digest)
     );
     let editor = env::var("EDITOR").unwrap_or_else(|_| "vi".to_owned());
     let wres = match value {
@@ -594,11 +594,7 @@ fn ctable(titles: Vec<&str>) -> prettytable::Table {
 
 fn _format_debug_value(value: &Value) -> String {
     let s: String = match value {
-        Value::String(s) => s
-            .to_string()
-            .replace('\n', "")
-            .replace('\r', "")
-            .replace('\t', " "),
+        Value::String(s) => s.to_string().replace(['\n', '\r'], "").replace('\t', " "),
         _ => value.to_string(),
     };
     if s.len() > 79 {
@@ -684,19 +680,13 @@ async fn load_dump(
                 if mode == DumpLoadMode::Load {
                     let mut data: Vec<(String, Value)> = Vec::new();
                     loop {
-                        let kd = match $d.pop() {
-                            Some(v) => v,
-                            None => break,
-                        };
+                        let Some(kd) = $d.pop() else { break };
                         data.push(kd);
                     }
                     db.key_load(data).await?;
                 } else {
                     loop {
-                        let kd = match $d.pop() {
-                            Some(v) => v,
-                            None => break,
-                        };
+                        let Some(kd) = $d.pop() else { break };
                         match mode {
                             DumpLoadMode::ViewFull => {
                                 let data_vec: Vec<Value> = vec![Value::from(kd.0), kd.1];
@@ -896,7 +886,7 @@ async fn main() {
                             println!(
                                 "{}{}={}",
                                 &pfx,
-                                name.replace('-', "_").replace('.', "_").to_uppercase(),
+                                name.replace(['-', '.'], "_").to_uppercase(),
                                 match value {
                                     Value::Array(a) => {
                                         let mut result = String::new();

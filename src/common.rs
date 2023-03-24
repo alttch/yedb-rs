@@ -97,7 +97,7 @@ pub struct DBInfo {
     pub version: u8,
 }
 
-#[derive(Serialize_repr, Deserialize_repr, PartialEq, Copy, Clone, Debug)]
+#[derive(Serialize_repr, Deserialize_repr, PartialEq, Copy, Clone, Debug, Default)]
 #[repr(i16)]
 pub enum ErrorKind {
     IOError = ERR_CODE_IO,
@@ -116,6 +116,7 @@ pub enum ErrorKind {
     Eof = ERR_CODE_EOF,
     MethodNotFound = ERR_CODE_METHOD_NOT_FOUND,
     InvalidParameter = ERR_CODE_INVALID_PARAMS,
+    #[default]
     Other = ERR_CODE_OTHER,
 }
 
@@ -168,12 +169,6 @@ impl std::fmt::Display for ErrorKind {
                 ErrorKind::Other => "Error",
             }
         )
-    }
-}
-
-impl Default for ErrorKind {
-    fn default() -> Self {
-        ErrorKind::Other
     }
 }
 

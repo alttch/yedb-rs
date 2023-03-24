@@ -212,7 +212,7 @@ fn main() {
             .unwrap();
         dbobj.set_cache_size(opts.cache_size);
         debug!("Auto bak: {}", opts.auto_bak);
-        dbobj.auto_bak = opts.auto_bak as u64;
+        dbobj.auto_bak = opts.auto_bak;
         if let Some(ref skip_bak) = opts.skip_bak {
             let skips = skip_bak.split(',').map(ToOwned::to_owned).collect();
             dbobj.skip_bak = skips;
@@ -236,7 +236,7 @@ async fn run_server(bind_to: &str, pidfile: &str) {
     } else {
         let _r = fs::remove_file(&bind_to).await;
         SDATA.write().await.socket_path = Some(bind_to.to_owned());
-        Listener::Unix(UnixListener::bind(&bind_to).unwrap())
+        Listener::Unix(UnixListener::bind(bind_to).unwrap())
     };
     let server_info = dbobj.open().unwrap();
     debug!("Engine version: {}", server_info.version);
