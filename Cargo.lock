@@ -1485,9 +1485,12 @@ dependencies = [
 
 [[package]]
 name = "simple-pool"
-version = "0.0.9"
+version = "0.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "642dde52b03e52e608e28e472c175225b0c037e09d58ca173f1e30f63b91078d"
+checksum = "1f88c5963450b12757ec5a5c395a01e4f0e66636d5016a909cffc9e4319de750"
+dependencies = [
+ "parking_lot",
+]
 
 [[package]]
 name = "slab"
