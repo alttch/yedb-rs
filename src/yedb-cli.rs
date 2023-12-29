@@ -16,7 +16,7 @@ use yedb::{
     YedbClientBusRtAsync, YedbClientLocalAsync, ENGINE_VERSION, VERSION,
 };
 
-use clap::Clap;
+use clap::{Parser, Subcommand, ValueEnum};
 
 #[macro_use]
 extern crate prettytable;
@@ -76,7 +76,7 @@ async fn benchmark(
     }
     let test_dict = Value::from(test_dict);
     for bm_op in [BenchmarkOp::Set, BenchmarkOp::Get, BenchmarkOp::GetCached] {
-        for op in vec![
+        for op in [
             ("number", test_number.clone()),
             ("string", test_string.clone()),
             ("array", test_array.clone()),
@@ -149,12 +149,12 @@ async fn benchmark(
     Ok(())
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 struct Opts {
     #[clap(
         short = 'C',
         long = "connect",
-        about = "path to database dir or socket (must end with .sock, .socket or .ipc) or tcp://host:port or rt://<BUS_PATH>:<BUS_TARGET> for BUS/RT",
+        help = "path to database dir or socket (must end with .sock, .socket or .ipc) or tcp://host:port or rt://<BUS_PATH>:<BUS_TARGET> for BUS/RT",
         default_value = "tcp://127.0.0.1:8870"
     )]
     path: String,
@@ -162,11 +162,10 @@ struct Opts {
     cmd: Cmd,
 }
 
-#[derive(Clap)]
+#[derive(Subcommand)]
 enum Cmd {
     Get(GetCommand),
     GetField(GetFieldCommand),
-    #[clap(about = "Gets key value as a batch source")]
     Source(SourceCommand),
     Incr(KeyCommand),
     Decr(KeyCommand),
@@ -183,6 +182,7 @@ enum Cmd {
     Info,
     Server(ServerPropCommand),
     Benchmark(BenchmarkCommand),
+    #[clap(subcommand)]
     Dump(DumpCommands),
     Check,
     Repair,
@@ -190,19 +190,19 @@ enum Cmd {
     Version,
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 struct KeyCommand {
     key: String,
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 struct KeyEditCommand {
     key: String,
-    #[clap(long = "default", about = "default value (file), '-' for stdin")]
+    #[clap(long = "default", help = "default value (file), '-' for stdin")]
     default: Option<String>,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, ValueEnum, PartialEq)]
 enum ConvertBools {
     No,
     OneZero,
@@ -222,26 +222,26 @@ impl std::str::FromStr for ConvertBools {
     }
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 struct SourceCommand {
     key: String,
-    #[clap(long, about = "value prefix")]
+    #[clap(long, help = "value prefix")]
     prefix: Option<String>,
     #[clap(
         long,
-        about = "convert booleans (no / onezero / one)",
+        help = "convert booleans (no / onezero / one)",
         default_value = "no"
     )]
     convert_bool: ConvertBools,
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 struct ServerPropCommand {
     prop: String,
     value: String,
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 struct BenchmarkCommand {
     #[clap(long, default_value = "4")]
     workers: u32,
@@ -249,81 +249,82 @@ struct BenchmarkCommand {
     iterations: u32,
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 enum PropBool {
     True,
     False,
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 struct KeyDstCommand {
     key: String,
     dst_key: String,
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 struct KeyLsCommand {
     key: String,
-    #[clap(short, long, about = "Include hidden")]
+    #[clap(short, long, help = "Include hidden")]
     all: bool,
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 struct KeyRCommand {
     key: String,
     #[clap(short, long)]
     recursive: bool,
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 struct GetCommand {
     key: String,
     #[clap(short, long)]
     recursive: bool,
     #[clap(
         long,
-        about = "convert booleans (no / onezero / one)",
+        help = "convert booleans (no / onezero / one)",
         default_value = "no"
     )]
     convert_bool: ConvertBools,
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 struct GetFieldCommand {
     key: String,
     field: String,
     #[clap(
         long,
-        about = "convert booleans (no / onezero / one)",
+        help = "convert booleans (no / onezero / one)",
         default_value = "no"
     )]
     convert_bool: ConvertBools,
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 struct SetCommand {
     key: String,
-    #[clap(about = "Value to set, '-' for stdin")]
+    #[clap(help = "Value to set, '-' for stdin")]
     value: String,
     #[clap(short = 'p', long, default_value = "string")]
     r#type: SetType,
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 struct SetFieldCommand {
     key: String,
     field: String,
-    #[clap(about = "Value to set, '-' for stdin")]
+    #[clap(help = "Value to set, '-' for stdin")]
     value: String,
     #[clap(short = 'p', long, default_value = "string")]
     r#type: SetType,
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 struct DeleteFieldCommand {
     key: String,
     field: String,
 }
+#[derive(Copy, Clone, PartialEq)]
 enum SetType {
     Num,
     Str,
@@ -332,27 +333,27 @@ enum SetType {
     Yaml,
 }
 
-#[derive(Clap)]
+#[derive(Subcommand)]
 enum DumpCommands {
     Save(DumpSaveCommand),
     Load(DumpLoadCommand),
     View(DumpViewCommand),
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 struct DumpSaveCommand {
     key: String,
     file: String,
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 struct DumpLoadCommand {
     file: String,
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 struct DumpViewCommand {
-    #[clap(about = "'-' for stdin")]
+    #[clap(help = "'-' for stdin")]
     file: String,
     #[clap(short = 'y', long)]
     full: bool,

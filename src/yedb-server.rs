@@ -19,7 +19,7 @@ use syslog::{BasicLogger, Facility, Formatter3164};
 use chrono::prelude::*;
 use colored::Colorize;
 
-use clap::Clap;
+use clap::{Parser, ValueEnum};
 
 use log::{debug, error, info, Level, Metadata, Record};
 
@@ -95,9 +95,9 @@ macro_rules! handle_term {
 }
 
 #[allow(clippy::struct_excessive_bools)]
-#[derive(Clap)]
+#[derive(Parser)]
 struct Opts {
-    #[clap(about = "database directory")]
+    #[clap(help = "database directory")]
     path: String,
     #[clap(short = 'B', long = "bind", default_value = "tcp://127.0.0.1:8870")]
     bind: String,
@@ -107,7 +107,7 @@ struct Opts {
     lock_path: Option<String>,
     #[clap(long, default_value = "json")]
     default_fmt: SerializationFormat,
-    #[clap(short = 'v', about = "Verbose logging")]
+    #[clap(short = 'v', help = "Verbose logging")]
     verbose: bool,
     #[clap(long)]
     disable_auto_flush: bool,
@@ -125,6 +125,8 @@ struct Opts {
     workers: usize,
 }
 
+#[derive(ValueEnum, PartialEq, Clone)]
+#[clap(rename_all = "lowercase")]
 enum SerializationFormat {
     Json,
     Yaml,

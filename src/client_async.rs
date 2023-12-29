@@ -85,7 +85,7 @@ impl YedbClientPoolAsync {
     /// Will panic on internal simple-pool errors
     pub fn build(self) -> Self {
         {
-            let mut holder = self.pool.holder.lock().unwrap();
+            let mut holder = self.pool.holder.lock();
             holder.resources.clear();
             for _ in 0..self.size {
                 let mut client = YedbClientAsync::new(&self.path);
