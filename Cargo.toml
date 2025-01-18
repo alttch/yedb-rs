@@ -1,8 +1,8 @@
 [package]
 name = "yedb"
-version = "0.4.16"
+version = "0.4.17"
 authors = ["Serhij S. <div@altertech.com>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/alttch/yedb-rs"
 description = "Rugged crash-free embedded and client/server key-value database"

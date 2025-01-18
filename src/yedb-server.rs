@@ -254,7 +254,7 @@ async fn run_server(bind_to: &str, pidfile: &str) {
         f.write_all(std::process::id().to_string().as_bytes())
             .await
             .unwrap();
-        SDATA.write().await.pid_path = pidfile.to_owned();
+        pidfile.clone_into(&mut SDATA.write().await.pid_path);
     }
     drop(dbobj);
     info!("Started, listening at {}", bind_to);
@@ -330,7 +330,11 @@ macro_rules! handle_request {
                             }
                         };
                         let mut response_frame = vec![yedb::ENGINE_VERSION, 2_u8];
-                        response_frame.extend(&(response_buf.len() as u32).to_le_bytes());
+                        let Ok(response_len) = u32::try_from(response_buf.len()) else {
+                            error!("Response too large");
+                            break;
+                        };
+                        response_frame.extend(&response_len.to_le_bytes());
                         response_frame.extend(&response_buf);
                         match $s.write_all(&response_frame).await {
                             Ok(_) => {}

@@ -69,7 +69,7 @@ impl YedbClientPoolAsync {
         self
     }
     pub fn path(mut self, path: &str) -> Self {
-        self.path = path.to_owned();
+        path.clone_into(&mut self.path);
         self
     }
     pub fn retries(mut self, retries: u8) -> Self {
@@ -177,7 +177,7 @@ impl YedbClientAsync {
     }
 
     fn gen_id(&mut self) -> u64 {
-        if self.request_id == std::u64::MAX {
+        if self.request_id == u64::MAX {
             self.request_id = 0;
         }
         self.request_id += 1;

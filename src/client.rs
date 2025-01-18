@@ -98,7 +98,7 @@ impl YedbClient {
     }
 
     fn gen_id(&mut self) -> u64 {
-        if self.request_id == std::u64::MAX {
+        if self.request_id == u64::MAX {
             self.request_id = 0;
         }
         self.request_id += 1;

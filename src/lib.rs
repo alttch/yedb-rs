@@ -175,9 +175,12 @@ impl From<SystemTimeError> for Error {
 
 macro_rules! timestamp_ns {
     () => {
-        SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)?
-            .as_nanos() as u64
+        u64::try_from(
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)?
+                .as_nanos(),
+        )
+        .unwrap()
     };
 }
 
@@ -420,7 +423,7 @@ fn create_dirs(basepath: &str, dirname: &str) -> Result<Vec<String>, Error> {
         cdir += "/";
         cdir += p;
         match fs::create_dir(&cdir) {
-            Ok(_) => created.push(cdir.clone()),
+            Ok(()) => created.push(cdir.clone()),
             Err(ref e) if e.kind() == io::ErrorKind::AlreadyExists => {}
             Err(e) => {
                 return Err(Error::new(
@@ -557,7 +560,7 @@ impl Database {
         if self.engine.is_some() {
             Err(Error::new(ErrorKind::Busy, "the database is opened"))
         } else {
-            self.path = path.to_owned();
+            path.clone_into(&mut self.path);
             self.key_path = self.path.clone() + "/keys";
             trace!("key path set to {}", self.key_path);
             self.trash_path = self.key_path.clone() + "/.trash";
@@ -582,7 +585,7 @@ impl Database {
         if self.engine.is_some() {
             Err(Error::new(ErrorKind::Busy, "the database is opened"))
         } else {
-            self.lock_path = path.to_owned();
+            path.clone_into(&mut self.lock_path);
             Ok(())
         }
     }
@@ -880,6 +883,7 @@ impl Database {
         }
     }
 
+    #[allow(clippy::assigning_clones)]
     fn _delete_key(
         &mut self,
         key: &str,
@@ -1582,7 +1586,7 @@ impl Database {
                 };
                 let key_to = format!("{}.bak{}", key, n);
                 match self._rename(&key_from, &key_to, false, true) {
-                    Ok(_) => {}
+                    Ok(()) => {}
                     Err(e) if e.kind() == ErrorKind::KeyNotFound => {}
                     Err(e) => return Err(e),
                 }
@@ -1628,12 +1632,12 @@ impl Database {
             Err(ref e) if e.kind() == ErrorKind::KeyNotFound => 0_i64,
             Err(e) => return Err(e),
         };
-        if value == std::i64::MAX {
+        if value == i64::MAX {
             return Err(Error::new(ErrorKind::DataError, "counter overflow"));
         }
         value += 1;
         match self.set_key_data(&key, Value::from(value), None, false) {
-            Ok(_) => Ok(value),
+            Ok(()) => Ok(value),
             Err(e) => Err(e),
         }
     }
@@ -1652,12 +1656,12 @@ impl Database {
             Err(ref e) if e.kind() == ErrorKind::KeyNotFound => 0_i64,
             Err(e) => return Err(e),
         };
-        if value == std::i64::MIN {
+        if value == i64::MIN {
             return Err(Error::new(ErrorKind::DataError, "counter overflow"));
         }
         value -= 1;
         match self.set_key_data(&key, Value::from(value), None, false) {
-            Ok(_) => Ok(value),
+            Ok(()) => Ok(value),
             Err(e) => Err(e),
         }
     }
@@ -2104,17 +2108,17 @@ mod tests {
         use std::fs;
         let db_path = "/tmp/yedb-test-db";
 
-        for checksums in vec![false, true] {
-            for db_format in vec!["json", "yaml", "msgpack", "cbor"] {
-                let _ = fs::remove_dir_all(&db_path);
+        for checksums in [false, true] {
+            for db_format in ["json", "yaml", "msgpack", "cbor"] {
+                let _ = fs::remove_dir_all(db_path);
                 let mut db = Database::new();
-                db.set_db_path(&db_path).unwrap();
-                db.set_default_fmt(&db_format, checksums).unwrap();
+                db.set_db_path(db_path).unwrap();
+                db.set_default_fmt(db_format, checksums).unwrap();
                 db.set_cache_size(100);
                 db.open().unwrap();
                 let i = db.info().unwrap();
-                assert_eq!(i.repair_recommended, false);
-                assert_eq!(i.auto_flush, true);
+                assert!(!i.repair_recommended);
+                assert!(i.auto_flush);
                 assert_eq!(i.cached_keys, 0);
                 assert_eq!(i.cache_size, 100);
                 assert_eq!(i.path, db_path);
@@ -2127,8 +2131,8 @@ mod tests {
                 db.server_set("cache_size", Value::from(1000)).unwrap();
 
                 let i = db.info().unwrap();
-                assert_eq!(i.repair_recommended, true);
-                assert_eq!(i.auto_flush, false);
+                assert!(i.repair_recommended);
+                assert!(!i.auto_flush);
                 assert_eq!(i.cache_size, 1000);
 
                 db.purge().unwrap();
@@ -2152,17 +2156,17 @@ mod tests {
 
                 db.key_delete("test").unwrap();
 
-                assert_eq!(db.key_get("test").is_err(), true);
+                assert!(db.key_get("test").is_err());
 
                 db.key_rename("x/y/z", "x/y/a").unwrap();
 
-                assert_eq!(db.key_get("x/y/z").is_err(), true);
+                assert!(db.key_get("x/y/z").is_err());
 
                 assert_eq!(db.key_get("x/y/a").unwrap().as_str().unwrap(), "test");
 
                 db.key_delete_recursive("x/y").unwrap();
 
-                assert_eq!(db.key_get("x/y/a").is_err(), true);
+                assert!(db.key_get("x/y/a").is_err());
 
                 db.key_copy(".a", "a/b/c").unwrap();
 
@@ -2174,7 +2178,7 @@ mod tests {
 
                 db.key_set(".schema/n", Value::from(schema)).unwrap();
 
-                assert_eq!(db.key_set("n/x", Value::from("test")).is_err(), true);
+                assert!(db.key_set("n/x", Value::from("test")).is_err());
 
                 db.key_set("n/x", Value::from(123)).unwrap();
 
@@ -2197,7 +2201,7 @@ mod tests {
             }
         }
 
-        let _ = fs::remove_dir_all(&db_path);
+        let _ = fs::remove_dir_all(db_path);
     }
 
     //fn test_ctx() {
