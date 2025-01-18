@@ -1,7 +1,7 @@
 #![ doc = include_str!( concat!( env!( "CARGO_MANIFEST_DIR" ), "/", "README.md" ) ) ]
 use fs2::FileExt;
 use glob::glob;
-use jsonschema::{Draft, JSONSchema};
+use jsonschema::{Draft, Validator as JSONSchema};
 use lru::LruCache;
 use openssl::sha::Sha256;
 use regex::Regex;
@@ -738,7 +738,7 @@ impl Database {
         if key.starts_with(".schema/") || key == ".schema" {
             JSONSchema::options()
                 .with_draft(Draft::Draft7)
-                .compile(value)?;
+                .build(value)?;
             Ok(())
         } else {
             // TODO cache compiled schemas
@@ -747,17 +747,10 @@ impl Database {
                     let schema = self.get_key_data(DataKey::Name(&schema_key), false)?.0;
                     let compiled = JSONSchema::options()
                         .with_draft(Draft::Draft7)
-                        .compile(&schema)?;
-                    compiled.validate(value).map_err(|e| {
-                        let mut err: String = String::new();
-                        for error in e {
-                            if !err.is_empty() {
-                                err += "\n";
-                            }
-                            err += error.to_string().as_str();
-                        }
-                        Error::new(ErrorKind::SchemaValidationError, err)
-                    })
+                        .build(&schema)?;
+                    compiled
+                        .validate(value)
+                        .map_err(|e| Error::new(ErrorKind::SchemaValidationError, e))
                 }
                 None => {
                     if self.strict_schema {

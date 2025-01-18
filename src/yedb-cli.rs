@@ -450,7 +450,7 @@ fn print_ok() {
 
 fn output_result_ok(result: Result<(), Error>) -> i32 {
     match result {
-        Ok(_) => {
+        Ok(()) => {
             print_ok();
             0
         }
@@ -492,7 +492,7 @@ async fn edit_key(db: &mut Box<dyn YedbClientAsyncExt>, key: &str, value: Option
         None => Ok(()),
     };
     match wres {
-        Ok(_) => loop {
+        Ok(()) => loop {
             match process::Command::new(&editor).arg(&temp_file_name).spawn() {
                 Ok(mut cmd) => {
                     cmd.wait().unwrap();
@@ -505,7 +505,7 @@ async fn edit_key(db: &mut Box<dyn YedbClientAsyncExt>, key: &str, value: Option
                                     }
                                 };
                                 match db.key_set(key, v).await {
-                                    Ok(_) => {
+                                    Ok(()) => {
                                         print_ok();
                                         break;
                                     }
