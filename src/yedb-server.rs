@@ -131,7 +131,6 @@ enum SerializationFormat {
     Json,
     Yaml,
     Msgpack,
-    Cbor,
 }
 
 impl std::str::FromStr for SerializationFormat {
@@ -141,10 +140,9 @@ impl std::str::FromStr for SerializationFormat {
             "json" => Ok(SerializationFormat::Json),
             "yaml" => Ok(SerializationFormat::Yaml),
             "msgpack" => Ok(SerializationFormat::Msgpack),
-            "cbor" => Ok(SerializationFormat::Cbor),
             _ => Err(Error::new(
                 ErrorKind::UnsupportedFormat,
-                format!("{}, valid values: json|yaml|msgpack|cbor", s),
+                format!("{}, valid values: json|yaml|msgpack", s),
             )),
         }
     }
@@ -158,7 +156,6 @@ impl fmt::Display for SerializationFormat {
             match self {
                 SerializationFormat::Json => "json".to_owned(),
                 SerializationFormat::Msgpack => "msgpack".to_owned(),
-                SerializationFormat::Cbor => "cbor".to_owned(),
                 SerializationFormat::Yaml => "yaml".to_owned(),
             }
         )

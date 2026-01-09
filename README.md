@@ -43,8 +43,7 @@ the engine but is not recommended - why then YEDB is used for).
 
 - All key values are *serde_json::Value* objects.
 
-- Storage serialization formats supported: JSON (default), YAML, MessagePack
-  and CBOR.
+- Storage serialization formats supported: JSON (default), YAML, MessagePack.
 
 - As byte type is not supported by *serde_json::Value* at this moment, Rust
   version can not handle byte key values.

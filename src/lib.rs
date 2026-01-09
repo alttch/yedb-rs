@@ -156,9 +156,10 @@ impl_err_io!(io::Error);
 
 impl_err_data!(rmp_serde::decode::Error);
 impl_err_data!(rmp_serde::encode::Error);
-impl_err_data!(serde_cbor::Error);
 impl_err_data!(serde_json::Error);
-impl_err_data!(serde_yaml::Error);
+impl_err_data!(serde_yaml::ser::Errors);
+impl_err_data!(serde::de::value::Error);
+impl_err_data!(std::str::Utf8Error);
 impl_err_data!(hex::FromHexError);
 
 impl<'a> From<jsonschema::ValidationError<'a>> for Error {
@@ -188,7 +189,6 @@ macro_rules! timestamp_ns {
 pub enum SerializationEngine {
     Json,
     Msgpack,
-    Cbor,
     Yaml,
 }
 
@@ -209,7 +209,6 @@ impl fmt::Display for SerializationEngine {
             match self {
                 SerializationEngine::Json => "json",
                 SerializationEngine::Msgpack => "msgpack",
-                SerializationEngine::Cbor => "cbor",
                 SerializationEngine::Yaml => "yaml",
             }
         )
@@ -221,7 +220,6 @@ impl SerializationEngine {
         match self {
             SerializationEngine::Json => 1,
             SerializationEngine::Msgpack => 2,
-            SerializationEngine::Cbor => 3,
             SerializationEngine::Yaml => 4,
         }
     }
@@ -233,7 +231,6 @@ impl SerializationEngine {
         match fmt {
             1 => SerializationEngine::Json,
             2 => SerializationEngine::Msgpack,
-            3 => SerializationEngine::Cbor,
             4 => SerializationEngine::Yaml,
             _ => unimplemented!(),
         }
@@ -246,7 +243,6 @@ impl SerializationEngine {
         match fmt {
             "json" => Ok(SerializationEngine::Json),
             "msgpack" => Ok(SerializationEngine::Msgpack),
-            "cbor" => Ok(SerializationEngine::Cbor),
             "yaml" => Ok(SerializationEngine::Yaml),
             _ => Err(Error::new(ErrorKind::UnsupportedFormat, fmt)),
         }
@@ -256,7 +252,6 @@ impl SerializationEngine {
         let mut sfx = match self {
             SerializationEngine::Json => ".json".to_owned(),
             SerializationEngine::Msgpack => ".mp".to_owned(),
-            SerializationEngine::Cbor => ".cb".to_owned(),
             SerializationEngine::Yaml => ".yml".to_owned(),
         };
         if checksums {
@@ -268,7 +263,7 @@ impl SerializationEngine {
     pub fn is_binary(&self) -> bool {
         match self {
             SerializationEngine::Json | SerializationEngine::Yaml => false,
-            SerializationEngine::Cbor | SerializationEngine::Msgpack => true,
+            SerializationEngine::Msgpack => true,
         }
     }
 
@@ -278,9 +273,8 @@ impl SerializationEngine {
     pub fn deserialize(&self, buf: &[u8]) -> Result<Value, Error> {
         Ok(match self {
             SerializationEngine::Msgpack => rmp_serde::from_slice(buf)?,
-            SerializationEngine::Cbor => serde_cbor::from_slice(buf)?,
             SerializationEngine::Json => serde_json::from_slice(buf)?,
-            SerializationEngine::Yaml => serde_yaml::from_slice(buf)?,
+            SerializationEngine::Yaml => serde_yaml::from_str(std::str::from_utf8(buf)?)?,
         })
     }
 
@@ -290,7 +284,6 @@ impl SerializationEngine {
     pub fn serialize(&self, value: &Value) -> Result<Vec<u8>, Error> {
         Ok(match self {
             SerializationEngine::Msgpack => rmp_serde::to_vec_named(value)?,
-            SerializationEngine::Cbor => serde_cbor::to_vec(value)?,
             SerializationEngine::Json => {
                 let mut v = serde_json::to_vec(value)?;
                 if v.is_empty() || v[v.len() - 1] != 0x0A_u8 {
@@ -299,7 +292,7 @@ impl SerializationEngine {
                 v
             }
             SerializationEngine::Yaml => {
-                let mut v = serde_yaml::to_vec(value)?;
+                let mut v = serde_yaml::to_string(value)?.into_bytes();
                 if v.is_empty() || v[v.len() - 1] != 0x0A_u8 {
                     v.push(0x0A_u8);
                 }
@@ -429,7 +422,7 @@ fn create_dirs(basepath: &str, dirname: &str) -> Result<Vec<String>, Error> {
                 return Err(Error::new(
                     ErrorKind::IOError,
                     format!("Unable to create directory {}: {}", cdir, e),
-                ))
+                ));
             }
         };
     }
@@ -1037,7 +1030,7 @@ impl Database {
         let buf = match fs::read(&key_file) {
             Ok(v) => v,
             Err(ref e) if e.kind() == io::ErrorKind::NotFound => {
-                return Err(Error::new(ErrorKind::KeyNotFound, key.get()))
+                return Err(Error::new(ErrorKind::KeyNotFound, key.get()));
             }
             Err(e) => return Err(Error::new(ErrorKind::IOError, e)),
         };
@@ -1212,7 +1205,7 @@ impl Database {
                             return Err(Error::new(
                                 ErrorKind::DataError,
                                 format!("Invalid key name '{:?}'", v),
-                            ))
+                            ));
                         }
                     };
                     self.set_key_data(&key, v[1].clone(), None, true)?;
@@ -1221,7 +1214,7 @@ impl Database {
                     return Err(Error::new(
                         ErrorKind::DataError,
                         format!("Invalid record '{}'", d),
-                    ))
+                    ));
                 }
             }
         }
@@ -1299,7 +1292,7 @@ impl Database {
                 return Err(Error::new(
                     ErrorKind::DataError,
                     format!("Invalid server option {}", name),
-                ))
+                ));
             }
         }
         Ok(())
@@ -1489,7 +1482,7 @@ impl Database {
                             }
                         }
                         _ => {
-                            return Err(Error::new(ErrorKind::DataError, "field is not an object"))
+                            return Err(Error::new(ErrorKind::DataError, "field is not an object"));
                         }
                     }
                 }
@@ -1544,7 +1537,7 @@ impl Database {
                             }
                         }
                         _ => {
-                            return Err(Error::new(ErrorKind::DataError, "field is not an object"))
+                            return Err(Error::new(ErrorKind::DataError, "field is not an object"));
                         }
                     }
                 }
@@ -2102,7 +2095,7 @@ mod tests {
         let db_path = "/tmp/yedb-test-db";
 
         for checksums in [false, true] {
-            for db_format in ["json", "yaml", "msgpack", "cbor"] {
+            for db_format in ["json", "yaml", "msgpack"] {
                 let _ = fs::remove_dir_all(db_path);
                 let mut db = Database::new();
                 db.set_db_path(db_path).unwrap();
