@@ -26,6 +26,7 @@ const ERR_CODE_METHOD_NOT_FOUND: i16 = -32601;
 const ERR_CODE_INVALID_PARAMS: i16 = -32602;
 const ERR_CODE_OTHER: i16 = -32603;
 
+#[allow(clippy::ref_option)]
 fn se_checksum<S>(checksum: &Option<[u8; 32]>, s: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,

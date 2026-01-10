@@ -5,7 +5,7 @@ use jsonschema::{Draft, Validator as JSONSchema};
 use lru::LruCache;
 use openssl::sha::Sha256;
 use regex::Regex;
-use serde::{de::Error as deError, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as deError};
 use serde_json::Value;
 use std::fmt;
 use std::fs;
@@ -13,12 +13,10 @@ use std::io;
 use std::io::Write;
 use std::path::Path;
 use std::process;
+use std::sync::LazyLock;
 use std::time::{Duration, Instant, SystemTime, SystemTimeError};
 
 use log::{error, trace, warn};
-
-#[macro_use]
-extern crate lazy_static;
 
 pub const SERVER_ID: &str = "yedb-altt-rs";
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -28,9 +26,7 @@ pub const DEFAULT_CACHE_SIZE: usize = 1000;
 
 const SLEEP_STEP: Duration = Duration::from_millis(50);
 
-lazy_static! {
-    static ref RE_BAK: Regex = Regex::new(r"\.bak(\d)*$").unwrap();
-}
+static RE_BAK: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\.bak(\d)*$").unwrap());
 
 trait ExplainValue {
     fn get_len(&self) -> Option<u64>;
@@ -96,7 +92,7 @@ enum DataKey<'a> {
     File(&'a str),
 }
 
-impl<'a> DataKey<'a> {
+impl DataKey<'_> {
     #[allow(dead_code)]
     fn is_file(&self) -> bool {
         match self {
@@ -367,7 +363,7 @@ fn sync_dir(dir: &str) -> Result<(), Error> {
             trace!("dir {} not found, skipping sync", dir);
         }
         Err(e) => return Err(Error::new(ErrorKind::IOError, e)),
-    };
+    }
     Ok(())
 }
 
@@ -384,7 +380,6 @@ fn lock_ex(fh: &fs::File, timeout: Duration) -> Result<bool, Error> {
                 if start.elapsed() > timeout {
                     return Err(Error::new(ErrorKind::TimeoutError, "lock timeout"));
                 }
-                continue;
             }
             Err(e) => return Err(Error::new(ErrorKind::IOError, e)),
         }
@@ -424,7 +419,7 @@ fn create_dirs(basepath: &str, dirname: &str) -> Result<Vec<String>, Error> {
                     format!("Unable to create directory {}: {}", cdir, e),
                 ));
             }
-        };
+        }
     }
     Ok(created)
 }
@@ -507,7 +502,7 @@ impl Database {
     fn need_skip_bak(&self, key: &str) -> bool {
         for k in &self.skip_bak {
             let l = k.len();
-            if k == key || (key.starts_with(k) && key.get(l..=l).map_or(false, |s| s == "/")) {
+            if k == key || (key.starts_with(k) && key.get(l..=l) == Some("/")) {
                 return true;
             }
         }
@@ -527,8 +522,7 @@ impl Database {
     pub fn set_default_fmt(&mut self, fmt: &str, checksums: bool) -> Result<(), Error> {
         trace!(
             "setting the default format to {} with checksums={}",
-            fmt,
-            checksums
+            fmt, checksums
         );
         if self.engine.is_some() {
             Err(Error::new(
@@ -536,10 +530,7 @@ impl Database {
                 "the database is already opened",
             ))
         } else {
-            self.default_fmt = match SerializationEngine::from_string(fmt) {
-                Ok(v) => v,
-                Err(e) => return Err(e),
-            };
+            self.default_fmt = SerializationEngine::from_string(fmt)?;
             self.default_checksums = checksums;
             Ok(())
         }
@@ -649,13 +640,13 @@ impl Database {
                 match lock_ex(&lock_fh, self.timeout) {
                     Ok(v) => self.repair_recommended = v,
                     Err(e) => return Err(e),
-                };
+                }
             }
             let mut lock_fh = fs::File::create(&self.lock_path)?;
             match lock_ex(&lock_fh, self.timeout) {
                 Ok(_) => {}
                 Err(e) => return Err(e),
-            };
+            }
             lock_fh.write_all(process::id().to_string().as_bytes())?;
             if self.auto_flush {
                 lock_fh.flush()?;
@@ -671,7 +662,7 @@ impl Database {
                 match self.repair() {
                     Ok(_) => warn!("auto-repair completed"),
                     Err(e) => error!("auto-repair failed {}", e),
-                };
+                }
             }
         } else {
             trace!("the database is clean, no repairing recommended");
@@ -721,7 +712,7 @@ impl Database {
                 None => {
                     break;
                 }
-            };
+            }
         }
         Ok(None)
     }
@@ -870,7 +861,7 @@ impl Database {
     }
 
     #[allow(clippy::assigning_clones)]
-    fn _delete_key(
+    fn delete_key_impl(
         &mut self,
         key: &str,
         recursive: bool,
@@ -879,10 +870,7 @@ impl Database {
     ) -> Result<(), Error> {
         trace!(
             "deleting key: {}, recursive: {}, no_flush: {}, dir_only: {}",
-            key,
-            recursive,
-            no_flush,
-            dir_only
+            key, recursive, no_flush, dir_only
         );
         let engine = get_engine!(self);
         let key = fmt_key(key);
@@ -1015,11 +1003,9 @@ impl Database {
             let key = fmt_key(key.get());
             if key.is_empty() {
                 return Err(Error::new(ErrorKind::KeyNotFound, key));
-            } else if !extended_info {
-                if let Some(v) = self.cache.get(&key) {
-                    trace!("using cached value for {}", key);
-                    return Ok((v.clone(), None));
-                }
+            } else if !extended_info && let Some(v) = self.cache.get(&key) {
+                trace!("using cached value for {}", key);
+                return Ok((v.clone(), None));
             }
         }
         let is_binary = engine.is_serialization_binary();
@@ -1094,10 +1080,7 @@ impl Database {
     }
 
     fn list_key_and_subkeys(&mut self, key: &str, hidden: bool) -> Result<Vec<String>, Error> {
-        let mut result = match self.list_subkeys(key, hidden) {
-            Ok(v) => v,
-            Err(e) => return Err(e),
-        };
+        let mut result = self.list_subkeys(key, hidden)?;
         match self.key_exists(key) {
             Ok(v) => {
                 if v {
@@ -1105,12 +1088,12 @@ impl Database {
                 }
             }
             Err(e) => return Err(e),
-        };
+        }
         Ok(result)
     }
 
     #[allow(clippy::case_sensitive_file_extension_comparisons)]
-    fn _purge(&mut self, keep_broken: bool) -> Result<Vec<String>, Error> {
+    fn purge_impl(&mut self, keep_broken: bool) -> Result<Vec<String>, Error> {
         trace!("purge requested, keep_broken: {}", keep_broken);
         let mut result: Vec<String> = Vec::new();
         let engine = get_engine!(self);
@@ -1302,14 +1285,14 @@ impl Database {
     ///
     /// Will return Err on I/O errors
     pub fn purge(&mut self) -> Result<Vec<String>, Error> {
-        self._purge(false)
+        self.purge_impl(false)
     }
 
     /// # Errors
     ///
     /// Will return Err on I/O errors
     pub fn safe_purge(&mut self) -> Result<(), Error> {
-        match self._purge(true) {
+        match self.purge_impl(true) {
             Ok(_) => Ok(()),
             Err(e) => Err(e),
         }
@@ -1330,21 +1313,21 @@ impl Database {
         if self.need_backup(key) {
             for n in 1..=self.auto_bak {
                 let key_name = format!("{}.bak{}", key, n);
-                if let Err(e) = self._delete_key(&key_name, false, false, false) {
-                    if e.kind() != ErrorKind::KeyNotFound {
-                        return Err(e);
-                    }
+                if let Err(e) = self.delete_key_impl(&key_name, false, false, false)
+                    && e.kind() != ErrorKind::KeyNotFound
+                {
+                    return Err(e);
                 }
             }
         }
-        self._delete_key(key, false, false, false)
+        self.delete_key_impl(key, false, false, false)
     }
 
     /// # Errors
     ///
     /// Will return Err on I/O errors
     pub fn key_delete_recursive(&mut self, key: &str) -> Result<(), Error> {
-        self._delete_key(key, true, false, false)
+        self.delete_key_impl(key, true, false, false)
     }
 
     // TODO context
@@ -1374,10 +1357,7 @@ impl Database {
     /// Will panic on internal errors
     #[allow(clippy::cast_possible_truncation)]
     pub fn key_explain(&mut self, key: &str) -> Result<KeyExplained, Error> {
-        let v = match self.get_key_data(DataKey::Name(key), true) {
-            Ok(v) => v,
-            Err(e) => return Err(e),
-        };
+        let v = self.get_key_data(DataKey::Name(key), true)?;
         let value = v.0;
         let info = v.1.unwrap();
         let value_len = value.get_len();
@@ -1571,7 +1551,7 @@ impl Database {
                     format!("{}.bak{}", key, n - 1)
                 };
                 let key_to = format!("{}.bak{}", key, n);
-                match self._rename(&key_from, &key_to, false, true) {
+                match self.rename_impl(&key_from, &key_to, false, true) {
                     Ok(()) => {}
                     Err(e) if e.kind() == ErrorKind::KeyNotFound => {}
                     Err(e) => return Err(e),
@@ -1656,10 +1636,10 @@ impl Database {
     ///
     /// Will return Err if the key is not found or is unable to be renamed
     pub fn key_rename(&mut self, key: &str, dst_key: &str) -> Result<(), Error> {
-        self._rename(key, dst_key, true, false)
+        self.rename_impl(key, dst_key, true, false)
     }
 
-    fn _rename(
+    fn rename_impl(
         &mut self,
         key: &str,
         dst_key: &str,
@@ -1721,7 +1701,7 @@ impl Database {
                 fs_extra::error::ErrorKind::NotFound => {}
                 _ => return Err(Error::new(ErrorKind::IOError, e)),
             },
-        };
+        }
 
         // rename dir
         if !key_only {
@@ -1752,7 +1732,7 @@ impl Database {
                         if e.kind() == io::ErrorKind::InvalidInput => {}
                     _ => return Err(Error::new(ErrorKind::IOError, e)),
                 },
-            };
+            }
         }
 
         if self.auto_flush && flush {
@@ -1762,7 +1742,7 @@ impl Database {
         }
 
         if renamed {
-            self._delete_key(&key, false, false, true)?;
+            self.delete_key_impl(&key, false, false, true)?;
             Ok(())
         } else {
             Err(Error::new(ErrorKind::KeyNotFound, key))
@@ -1858,7 +1838,7 @@ impl Database {
                 let _r = sync_dir(&dir);
             }
         }
-        for key in self._purge(false)? {
+        for key in self.purge_impl(false)? {
             result.push((key, false));
         }
         trace!("repair completed");
@@ -2089,8 +2069,8 @@ mod tests {
     #[test]
     fn test_db() {
         use super::*;
-        use serde_json::map::Map;
         use serde_json::Value;
+        use serde_json::map::Map;
         use std::fs;
         let db_path = "/tmp/yedb-test-db";
 

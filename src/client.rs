@@ -1,7 +1,7 @@
 use serde_json::Value;
 
-use std::io::prelude::*;
 use std::io::Read;
+use std::io::prelude::*;
 use std::net::TcpStream;
 use std::os::unix::net::UnixStream;
 
@@ -126,7 +126,7 @@ impl YedbClient {
     pub fn call(&mut self, req: &JSONRpcRequest) -> Result<Value, Error> {
         let mut attempt = 0;
         loop {
-            match self._call(req) {
+            match self.call_impl(req) {
                 Ok(v) => return Ok(v),
                 Err(e) if e.kind() == ErrorKind::ProtocolError => {
                     attempt += 1;
@@ -141,7 +141,7 @@ impl YedbClient {
     }
 
     #[allow(clippy::cast_possible_truncation)]
-    fn _call(&mut self, req: &JSONRpcRequest) -> Result<Value, Error> {
+    fn call_impl(&mut self, req: &JSONRpcRequest) -> Result<Value, Error> {
         let mut frame = vec![1_u8, 2_u8];
         let buf = req.pack()?;
         frame.extend(&(buf.len() as u32).to_le_bytes());

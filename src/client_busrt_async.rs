@@ -2,8 +2,8 @@ use serde_json::Value;
 
 use super::common::{DBInfo, Error, KeyExplained};
 
-use busrt::rpc::Rpc;
 use busrt::QoS;
+use busrt::rpc::Rpc;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -37,9 +37,7 @@ macro_rules! call {
         }
         do_call!($self, $method, rmp_serde::to_vec_named(&params)?.into())
     }};
-    ($self: expr, $method: expr) => {{
-        do_call!($self, $method, busrt::empty_payload!())
-    }};
+    ($self: expr, $method: expr) => {{ do_call!($self, $method, busrt::empty_payload!()) }};
 }
 
 impl<R> YedbClientBusRtAsync<R>

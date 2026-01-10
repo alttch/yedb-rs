@@ -1,8 +1,8 @@
-use crate::common::{JSONRpcRequest, JSONRpcResponse};
 use crate::Database;
 use crate::Error;
+use crate::common::{JSONRpcRequest, JSONRpcResponse};
 use log::trace;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 #[cfg(feature = "busrt-rpc")]
 use std::collections::HashMap;
 #[cfg(any(feature = "server-embed", feature = "server"))]
@@ -10,9 +10,9 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 #[cfg(feature = "busrt-rpc")]
-use busrt::rpc::{rpc_err_str, RpcError, RpcEvent, RpcHandlers, RpcResult};
-#[cfg(feature = "busrt-rpc")]
 use busrt::Frame;
+#[cfg(feature = "busrt-rpc")]
+use busrt::rpc::{RpcError, RpcEvent, RpcHandlers, RpcResult, rpc_err_str};
 
 #[cfg(any(feature = "server-embed", feature = "server"))]
 #[inline]
@@ -148,9 +148,9 @@ pub async fn process_request(
         "key_get_field" => run_request!(vec!["key", "field"], {
             let key = parse_jsonrpc_request_param!(request, "key", Value::String);
             let field = parse_jsonrpc_request_param!(request, "field", Value::String);
-            if key.is_some() && field.is_some() {
-                let k = key.unwrap();
-                let f = field.unwrap();
+            if let Some(k) = key
+                && let Some(f) = field
+            {
                 trace!("API request: key_get_field {}:{}", k, f);
                 respond!(db.write().await.key_get_field(k, f))
             } else {
@@ -196,10 +196,11 @@ pub async fn process_request(
         "key_set" => run_request!(vec!["key", "value"], {
             let key = parse_jsonrpc_request_param!(request, "key", Value::String);
             let value = request.params.get("value").cloned();
-            if key.is_some() && value.is_some() {
-                let k = key.unwrap();
+            if let Some(k) = key
+                && let Some(v) = value
+            {
                 trace!("API request: key_set {}", k);
-                respond!(db.write().await.key_set(k, value.unwrap()))
+                respond!(db.write().await.key_set(k, v))
             } else {
                 invalid_param!()
             }
@@ -208,11 +209,12 @@ pub async fn process_request(
             let key = parse_jsonrpc_request_param!(request, "key", Value::String);
             let field = parse_jsonrpc_request_param!(request, "field", Value::String);
             let value = request.params.get("value").cloned();
-            if key.is_some() && field.is_some() && value.is_some() {
-                let k = key.unwrap();
-                let f = field.unwrap();
+            if let Some(k) = key
+                && let Some(f) = field
+                && let Some(v) = value
+            {
                 trace!("API request: key_set_field {}:{}", k, f);
-                respond!(db.write().await.key_set_field(k, f, value.unwrap()))
+                respond!(db.write().await.key_set_field(k, f, v))
             } else {
                 invalid_param!()
             }
@@ -220,9 +222,9 @@ pub async fn process_request(
         "key_delete_field" => run_request!(vec!["key", "field"], {
             let key = parse_jsonrpc_request_param!(request, "key", Value::String);
             let field = parse_jsonrpc_request_param!(request, "field", Value::String);
-            if key.is_some() && field.is_some() {
-                let k = key.unwrap();
-                let f = field.unwrap();
+            if let Some(k) = key
+                && let Some(f) = field
+            {
                 trace!("API request: key_delete_field {}:{}", k, f);
                 respond!(db.write().await.key_delete_field(k, f))
             } else {
@@ -248,9 +250,9 @@ pub async fn process_request(
         "key_copy" => run_request!(vec!["key", "dst_key"], {
             let key = parse_jsonrpc_request_param!(request, "key", Value::String);
             let dst_key = parse_jsonrpc_request_param!(request, "dst_key", Value::String);
-            if key.is_some() && dst_key.is_some() {
-                let k = key.unwrap();
-                let dk = dst_key.unwrap();
+            if let Some(k) = key
+                && let Some(dk) = dst_key
+            {
                 trace!("API request: key_copy {} -> {}", k, dk);
                 respond!(db.write().await.key_copy(k, dk))
             } else {
@@ -260,9 +262,9 @@ pub async fn process_request(
         "key_rename" => run_request!(vec!["key", "dst_key"], {
             let key = parse_jsonrpc_request_param!(request, "key", Value::String);
             let dst_key = parse_jsonrpc_request_param!(request, "dst_key", Value::String);
-            if key.is_some() && dst_key.is_some() {
-                let k = key.unwrap();
-                let dk = dst_key.unwrap();
+            if let Some(k) = key
+                && let Some(dk) = dst_key
+            {
                 trace!("API request: key_rename {} -> {}", k, dk);
                 respond!(db.write().await.key_rename(k, dk))
             } else {

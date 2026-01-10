@@ -7,13 +7,13 @@ use std::fmt;
 use std::fs;
 use std::io::{self, Read};
 use std::process;
-use std::sync::atomic;
 use std::sync::Arc;
+use std::sync::atomic;
 use std::time::{Duration, SystemTime};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use yedb::{
-    Error, ErrorKind, SerializationEngine, YedbClientAsync, YedbClientAsyncExt,
-    YedbClientBusRtAsync, YedbClientLocalAsync, ENGINE_VERSION, VERSION,
+    ENGINE_VERSION, Error, ErrorKind, SerializationEngine, VERSION, YedbClientAsync,
+    YedbClientAsyncExt, YedbClientBusRtAsync, YedbClientLocalAsync,
 };
 
 use clap::{Parser, Subcommand, ValueEnum};
@@ -488,7 +488,7 @@ async fn edit_key(db: &mut Box<dyn YedbClientAsyncExt>, key: &str, value: Option
     );
     let editor = env::var("EDITOR").unwrap_or_else(|_| "vi".to_owned());
     let wres = match value {
-        Some(v) => fs::write(&temp_file_name, serde_yaml::to_string(&v).unwrap()),
+        Some(v) => fs::write(&temp_file_name, serde_yaml::to_string(v).unwrap()),
         None => Ok(()),
     };
     match wres {
@@ -499,11 +499,11 @@ async fn edit_key(db: &mut Box<dyn YedbClientAsyncExt>, key: &str, value: Option
                     match fs::read_to_string(&temp_file_name) {
                         Ok(content) => match serde_yaml::from_str(&content) {
                             Ok(v) => {
-                                if let Some(val) = value {
-                                    if &v == val {
-                                        break;
-                                    }
-                                };
+                                if let Some(val) = value
+                                    && &v == val
+                                {
+                                    break;
+                                }
                                 match db.key_set(key, v).await {
                                     Ok(()) => {
                                         print_ok();
@@ -593,7 +593,7 @@ fn ctable(titles: Vec<&str>) -> prettytable::Table {
     table
 }
 
-fn _format_debug_value(value: &Value) -> String {
+fn format_debug_value(value: &Value) -> String {
     let s: String = match value {
         Value::String(s) => s.to_string().replace(['\n', '\r'], "").replace('\t', " "),
         _ => value.to_string(),
@@ -626,7 +626,7 @@ impl DisplayVerbose for Value {
 fn display_obj(obj: &serde_json::map::Map<String, Value>) {
     let mut table = ctable(vec!["name", "value"]);
     for k in obj {
-        let value = _format_debug_value(k.1);
+        let value = format_debug_value(k.1);
         table.add_row(row![&k.0, value]);
     }
     table.printstd();
@@ -751,7 +751,7 @@ fn format_time(obj: &mut serde_json::map::Map<String, Value>, fields: Vec<&str>)
             let d: SystemTime = SystemTime::UNIX_EPOCH + Duration::from_nanos(ts_ns);
             let dt: DateTime<Local> = DateTime::from(d);
             obj.insert(f.to_owned(), Value::from(dt.to_rfc3339()));
-        };
+        }
     }
 }
 
@@ -759,18 +759,10 @@ fn convert_bool(value: Option<bool>, mode: ConvertBools) -> String {
     match mode {
         ConvertBools::No => value.map_or("null".to_owned(), |v| v.to_string()),
         ConvertBools::OneZero => value.map_or("0".to_owned(), |v| {
-            if v {
-                "1".to_owned()
-            } else {
-                "0".to_owned()
-            }
+            if v { "1".to_owned() } else { "0".to_owned() }
         }),
         ConvertBools::One => value.map_or(<_>::default(), |v| {
-            if v {
-                "1".to_owned()
-            } else {
-                <_>::default()
-            }
+            if v { "1".to_owned() } else { <_>::default() }
         }),
     }
 }
@@ -850,7 +842,7 @@ async fn main() {
                     Ok(v) => {
                         let mut table = ctable(vec!["key", "type", "value"]);
                         for key in v {
-                            let value = _format_debug_value(&key.1);
+                            let value = format_debug_value(&key.1);
                             table.add_row(row![&key.0, &key.1.type_as_str(), value]);
                         }
                         table.printstd();
@@ -968,11 +960,11 @@ async fn main() {
         },
         Cmd::Edit(c) => match db.key_get(&c.key).await {
             Ok(v) => {
-                if let Some(v) = c.default {
-                    if v == "-" {
-                        let mut buffer = String::new();
-                        io::stdin().read_to_string(&mut buffer).unwrap();
-                    }
+                if let Some(v) = c.default
+                    && v == "-"
+                {
+                    let mut buffer = String::new();
+                    io::stdin().read_to_string(&mut buffer).unwrap();
                 }
                 edit_key(&mut db, &c.key, Some(&v)).await
             }

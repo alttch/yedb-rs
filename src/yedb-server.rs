@@ -1,16 +1,14 @@
-use lazy_static::lazy_static;
-
 use tokio::fs;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream, UnixListener, UnixStream};
-use tokio::signal::unix::{signal, SignalKind};
+use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::RwLock;
 
 use std::fmt;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 use yedb::common::JSONRpcRequest;
-use yedb::server::{process_request, YedbServerErrorKind};
+use yedb::server::{YedbServerErrorKind, process_request};
 use yedb::{Database, Error, ErrorKind};
 
 use log::LevelFilter;
@@ -21,7 +19,7 @@ use colored::Colorize;
 
 use clap::{Parser, ValueEnum};
 
-use log::{debug, error, info, Level, Metadata, Record};
+use log::{Level, Metadata, Record, debug, error, info};
 
 struct SimpleLogger;
 
@@ -64,13 +62,13 @@ pub struct ServerData {
     pub socket_path: Option<String>,
 }
 
-lazy_static! {
-    static ref SDATA: RwLock<ServerData> = RwLock::new(ServerData {
+static SDATA: LazyLock<RwLock<ServerData>> = LazyLock::new(|| {
+    RwLock::new(ServerData {
         pid_path: String::new(),
-        socket_path: None
-    });
-    static ref DBCELL: Arc<RwLock<Database>> = yedb::server::create_db();
-}
+        socket_path: None,
+    })
+});
+static DBCELL: LazyLock<Arc<RwLock<Database>>> = LazyLock::new(yedb::server::create_db);
 
 macro_rules! handle_term {
     ($s:expr) => {
@@ -278,7 +276,7 @@ async fn run_server(bind_to: &str, pidfile: &str) {
                     error!("API connect error {}", e);
                 }
             },
-        };
+        }
     }
 }
 
@@ -342,7 +340,7 @@ macro_rules! handle_request {
                         };
                     }
                     Err(e) if e == YedbServerErrorKind::Critical => break,
-                    Err(_) => continue,
+                    Err(_) => {}
                 }
             }
             Err(e) => {

@@ -1,6 +1,6 @@
-use crate::common::{DBInfo, Error, KeyExplained};
 use crate::Database;
 use crate::YedbClientAsyncExt;
+use crate::common::{DBInfo, Error, KeyExplained};
 use serde_json::Value;
 use std::sync::Arc;
 use std::time::Duration;

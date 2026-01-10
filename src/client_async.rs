@@ -204,7 +204,8 @@ impl YedbClientAsync {
         let mut attempt = 0;
         let started = std::time::Instant::now();
         loop {
-            match tokio::time::timeout(self.timeout - started.elapsed(), self._call(req)).await {
+            match tokio::time::timeout(self.timeout - started.elapsed(), self.call_impl(req)).await
+            {
                 Ok(v) => match v {
                     Ok(v) => return Ok(v),
                     Err(e) if e.kind() == ErrorKind::ProtocolError => {
@@ -221,7 +222,7 @@ impl YedbClientAsync {
         }
     }
     #[allow(clippy::cast_possible_truncation)]
-    async fn _call(&mut self, req: &JSONRpcRequest) -> Result<Value, Error> {
+    async fn call_impl(&mut self, req: &JSONRpcRequest) -> Result<Value, Error> {
         let mut frame = vec![1_u8, 2_u8];
         let buf = req.pack()?;
         frame.extend(&(buf.len() as u32).to_le_bytes());
