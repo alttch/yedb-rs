@@ -3,7 +3,6 @@ use fs2::FileExt;
 use glob::glob;
 use jsonschema::{Draft, Validator as JSONSchema};
 use lru::LruCache;
-use openssl::sha::Sha256;
 use regex::Regex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as deError};
 use serde_json::Value;
@@ -799,14 +798,12 @@ impl Database {
         };
         let temp_file = self.key_path.clone() + "/" + key.as_str() + ".tmp";
         let content = engine.se.unwrap().serialize(&value)?;
-        let mut hasher = Sha256::new();
-        hasher.update(&content);
-        let digest = hasher.finish();
+        let digest = aws_lc_rs::digest::digest(&aws_lc_rs::digest::SHA256, &content);
         let mut file = fs::File::create(&temp_file)?;
         let is_binary = engine.is_serialization_binary();
         if engine.checksums {
             if is_binary {
-                file.write_all(&digest)?;
+                file.write_all(digest.as_ref())?;
             } else {
                 file.write_all(hex::encode(digest).as_bytes())?;
                 file.write_all(&[0x0A_u8])?;
@@ -1029,22 +1026,26 @@ impl Database {
                     format!("the key file is corrupted: {}", key_file),
                 ));
             }
-            let mut hasher = Sha256::new();
-            if is_binary {
-                hasher.update(&buf[40..buf.len()]);
+            let buf_to_hash = if is_binary {
+                &buf[40..buf.len()]
             } else {
-                hasher.update(&buf[82..buf.len()]);
-            }
-            let digest = hasher.finish();
-            if (is_binary && digest != buf[0..32])
-                || (!is_binary && digest != *hex::decode(&buf[0..64])?.as_slice())
+                &buf[82..buf.len()]
+            };
+            let digest = aws_lc_rs::digest::digest(&aws_lc_rs::digest::SHA256, buf_to_hash);
+            if (is_binary && digest.as_ref() != &buf[0..32])
+                || (!is_binary && digest.as_ref() != hex::decode(&buf[0..64])?.as_slice())
             {
                 return Err(Error::new(
                     ErrorKind::DataError,
                     format!("checksum does not match: {}", key_file),
                 ));
             }
-            checksum = Some(digest);
+            checksum = Some(
+                digest
+                    .as_ref()
+                    .try_into()
+                    .map_err(|_| Error::new(ErrorKind::DataError, "unable to get checksum"))?,
+            );
             if is_binary {
                 stime = Some(u64::from_le_bytes([
                     buf[32], buf[33], buf[34], buf[35], buf[36], buf[37], buf[38], buf[39],

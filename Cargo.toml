@@ -21,6 +21,7 @@ name = "yedb"
 path = "src/lib.rs"
 
 [dependencies]
+aws-lc-rs = "1.15"
 tokio = { version = "1.45", features = ["full"], optional = true }
 serde = { version =  "1.0", features = ["derive"] }
 serde_repr = "0.1.7"
@@ -34,7 +35,6 @@ regex = "1"
 hex = "0.4.2"
 log = "0.4.14"
 fs_extra = "1.2.0"
-openssl = "0.10"
 #byteorder = "1.4.2"
 jsonschema = { version = "0.28", features = [] }
 syslog = { version = "6.1.0", optional = true }
@@ -61,7 +61,7 @@ client-busrt-async = ["dep:busrt", "client-async", "dep:async-trait"]
 client-local-async = ["dep:tokio", "client-async", "dep:async-trait"]
 busrt-rpc = ["dep:async-trait", "dep:busrt"]
 server-embed = ["dep:tokio"]
-openssl-vendored = ["openssl/vendored"]
+fips = ["aws-lc-rs/fips"]
 
 [[bin]]
 name = "yedb-server"
