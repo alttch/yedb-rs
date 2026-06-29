@@ -6,6 +6,7 @@ use lru::LruCache;
 use regex::Regex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as deError};
 use serde_json::Value;
+use std::collections::BTreeSet;
 use std::fmt;
 use std::fs;
 use std::io;
@@ -444,6 +445,8 @@ pub struct Database {
     pub auto_bak: u64,
     // do not backup the following keys (and their subkeys)
     pub skip_bak: Vec<String>,
+    // always fsync these keys (and their subkeys) even when auto_flush is disabled
+    force_flush_keys: BTreeSet<String>,
     pub strict_schema: bool,
     default_fmt: SerializationEngine,
     default_checksums: bool,
@@ -480,6 +483,7 @@ impl Database {
             auto_flush: true,
             auto_bak: 0,
             skip_bak: Vec::new(),
+            force_flush_keys: BTreeSet::new(),
             strict_schema: false,
             lock_ex: true,
             write_modified_only: true,
@@ -499,13 +503,45 @@ impl Database {
     }
 
     fn need_skip_bak(&self, key: &str) -> bool {
-        for k in &self.skip_bak {
+        Self::key_matches_prefix_list(key, &self.skip_bak)
+    }
+
+    fn need_force_flush(&self, key: &str) -> bool {
+        Self::key_matches_prefix_set(key, &self.force_flush_keys)
+    }
+
+    fn should_flush_key(&self, key: &str) -> bool {
+        self.auto_flush || self.need_force_flush(key)
+    }
+
+    fn key_matches_prefix_list(key: &str, prefixes: &[String]) -> bool {
+        for k in prefixes {
             let l = k.len();
             if k == key || (key.starts_with(k) && key.get(l..=l) == Some("/")) {
                 return true;
             }
         }
         false
+    }
+
+    fn key_matches_prefix_set(key: &str, prefixes: &BTreeSet<String>) -> bool {
+        if prefixes.contains(key) {
+            return true;
+        }
+        for (idx, _) in key.match_indices('/') {
+            if prefixes.contains(&key[..idx]) {
+                return true;
+            }
+        }
+        false
+    }
+
+    pub fn set_force_auto_flush<I, S>(&mut self, keys: I)
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        self.force_flush_keys = keys.into_iter().map(|k| k.as_ref().to_owned()).collect();
     }
 
     fn need_backup(&self, key: &str) -> bool {
@@ -761,6 +797,7 @@ impl Database {
         if key.is_empty() {
             return Err(Error::new(ErrorKind::KeyNotFound, key));
         }
+        let flush = self.should_flush_key(&key);
         let engine = get_engine!(self);
         let mut dts: Vec<String> = Vec::new();
         if !ignore_schema {
@@ -784,7 +821,7 @@ impl Database {
             Some(pos) => {
                 let key_dir = self.key_path.clone() + "/" + &key[0..pos];
                 let dirs = create_dirs(&self.key_path, &key[0..pos])?;
-                if self.auto_flush {
+                if flush {
                     for dir in dirs {
                         let d = dir[..dir.rfind('/').unwrap()].to_string();
                         if !dts.contains(&d) {
@@ -820,18 +857,18 @@ impl Database {
             }
         }
         file.write_all(&content)?;
-        if self.auto_flush {
+        if flush {
             file.flush()?;
             file.sync_all()?;
         }
         drop(file);
         fs::rename(&temp_file, key_file)?;
-        if self.auto_flush && !dts.contains(&key_dir) {
+        if flush && !dts.contains(&key_dir) {
             dts.push(key_dir);
         }
         self.cache.pop(&key);
         self.cache.put(key, value);
-        if self.auto_flush {
+        if flush {
             for dir in dts {
                 let _r = sync_dir(&dir);
             }
@@ -871,6 +908,7 @@ impl Database {
         );
         let engine = get_engine!(self);
         let key = fmt_key(key);
+        let flush = self.should_flush_key(&key);
         if key.starts_with(".trash/") || key == ".trash" {
             return Err(Error::new(
                 ErrorKind::KeyNotFound,
@@ -937,20 +975,20 @@ impl Database {
         }
         loop {
             if key_dir == self.key_path {
-                if self.auto_flush && !dts.contains(&key_dir) {
+                if flush && !dts.contains(&key_dir) {
                     dts.push(key_dir);
                 }
                 break;
             }
             if fs::remove_dir(&key_dir).is_err() {
-                if self.auto_flush && !dts.contains(&key_dir) {
+                if flush && !dts.contains(&key_dir) {
                     dts.push(key_dir);
                 }
                 break;
             }
             key_dir = key_dir[0..key_dir.rfind('/').unwrap()].to_owned();
         }
-        if self.auto_flush && !no_flush {
+        if flush && !no_flush {
             for dir in dts {
                 let _r = sync_dir(&dir);
             }
@@ -1655,6 +1693,7 @@ impl Database {
         if key.is_empty() || dst_key.is_empty() {
             return Err(Error::new(ErrorKind::KeyNotFound, key));
         }
+        let flush_dirs = flush && (self.should_flush_key(&key) || self.should_flush_key(&dst_key));
 
         let pos = dst_key.rfind('/');
         let dst_key_path = match pos {
@@ -1664,7 +1703,7 @@ impl Database {
         let dst_key_dir = self.key_path.clone() + "/" + dst_key_path;
 
         let dirs = create_dirs(&self.key_path, dst_key_path)?;
-        if self.auto_flush && flush {
+        if flush_dirs {
             for dir in dirs {
                 let d = dir[..dir.rfind('/').unwrap()].to_string();
                 if !dts.contains(&d) {
@@ -1688,7 +1727,7 @@ impl Database {
                 if let Some(v) = self.cache.pop(&key) {
                     self.cache.put(dst_key.clone(), v);
                 }
-                if self.auto_flush && flush {
+                if flush_dirs {
                     let d1 = key_file[..key_file.rfind('/').unwrap()].to_string();
                     if !dts.contains(&d1) {
                         dts.push(d1);
@@ -1716,7 +1755,7 @@ impl Database {
                 Ok(_) => {
                     renamed = true;
                     self.purge_cache_by_path(&dir_name);
-                    if self.auto_flush && flush {
+                    if flush_dirs {
                         let d1 = dir_name[..dir_name.rfind('/').unwrap()].to_string();
                         let d2 = dst_dir_name[..dst_dir_name.rfind('/').unwrap()].to_string();
                         if !dts.contains(&d1) {
@@ -1736,7 +1775,7 @@ impl Database {
             }
         }
 
-        if self.auto_flush && flush {
+        if flush_dirs {
             for dir in dts {
                 let _r = sync_dir(&dir);
             }
@@ -2168,6 +2207,33 @@ mod tests {
             }
         }
 
+        let _ = fs::remove_dir_all(db_path);
+    }
+
+    #[test]
+    fn test_force_auto_flush() {
+        use super::*;
+        use serde_json::Value;
+        use std::fs;
+
+        let db_path = "/tmp/yedb-test-force-flush";
+        let _ = fs::remove_dir_all(db_path);
+        let mut db = Database::new();
+        db.set_db_path(db_path).unwrap();
+        db.auto_flush = false;
+        db.set_force_auto_flush(["eva/data/boot-id", "counters"]);
+        db.open().unwrap();
+
+        db.key_set("other", Value::from(1)).unwrap();
+        db.key_increment("eva/data/boot-id").unwrap();
+        db.key_increment("counters/x").unwrap();
+        db.key_set("misc", Value::from(2)).unwrap();
+
+        assert_eq!(db.key_get("eva/data/boot-id").unwrap().as_i64().unwrap(), 1);
+        assert_eq!(db.key_get("counters/x").unwrap().as_i64().unwrap(), 1);
+        assert_eq!(db.key_get("other").unwrap().as_i64().unwrap(), 1);
+
+        db.close().unwrap();
         let _ = fs::remove_dir_all(db_path);
     }
 
