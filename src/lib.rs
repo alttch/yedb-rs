@@ -11,6 +11,7 @@ use std::fmt;
 use std::fs;
 use std::io;
 use std::io::Write;
+use std::num::NonZeroUsize;
 use std::path::Path;
 use std::process;
 use std::sync::LazyLock;
@@ -491,7 +492,9 @@ impl Database {
             lock_path: String::new(),
             meta_path: String::new(),
             trash_path: String::new(),
-            cache: Box::new(LruCache::new(DEFAULT_CACHE_SIZE)),
+            cache: Box::new(LruCache::new(
+                NonZeroUsize::new(DEFAULT_CACHE_SIZE).expect("default cache size must be non-zero"),
+            )),
             engine: None,
             repair_recommended: false,
             lock_fh: None,
@@ -593,7 +596,8 @@ impl Database {
 
     pub fn set_cache_size(&mut self, size: usize) {
         trace!("setting the cache size to {} keys", size);
-        self.cache.resize(size);
+        self.cache
+            .resize(NonZeroUsize::new(size).expect("cache size must be non-zero"));
     }
 
     /// # Errors
@@ -1256,7 +1260,7 @@ impl Database {
             repair_recommended: self.repair_recommended,
             auto_flush: self.auto_flush,
             cached_keys: self.cache.len(),
-            cache_size: self.cache.cap(),
+            cache_size: self.cache.cap().get(),
             auto_bak: self.auto_bak,
             strict_schema: self.strict_schema,
             path: self.path.clone(),
@@ -1306,7 +1310,7 @@ impl Database {
                         Some(v) => v,
                         None => invalid_server_option_value!(name, &value),
                     };
-                    self.cache.resize(size as usize);
+                    self.set_cache_size(size as usize);
                 }
                 _ => invalid_server_option_value!(name, &value),
             },

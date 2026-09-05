@@ -1,6 +1,6 @@
 [package]
 name = "yedb"
-version = "0.5.2"
+version = "0.5.3"
 authors = ["Serhij S. <div@altertech.com>"]
 edition = "2024"
 license = "Apache-2.0"
@@ -30,11 +30,12 @@ serde_json = "1.0"
 serde_yaml = { version =  "0.1.3", package = "serde_yaml2" }
 rmp-serde = "1.3.1"
 fs2 = "0.4.3"
-lru = "0.7.1"
+lru = "0.18.4"
 glob = "0.3.0"
 regex = "1"
 hex = "0.4.2"
 log = "0.4.14"
+openssl = { version = "0.10.78", optional = true }
 fs_extra = "1.2.0"
 #byteorder = "1.4.2"
 jsonschema = { version = "0.28", features = [] }
@@ -55,7 +56,7 @@ bumpalo = { version = "3.14.0", optional = true }
 server = ["dep:syslog", "dep:chrono", "dep:colored", "dep:clap", "dep:tokio", "dep:bumpalo", "busrt-rpc"]
 cli = ["dep:chrono", "dep:colored", "dep:clap", "dep:prettytable-rs", "dep:getch",
     "dep:bma-benchmark", "dep:tokio", "client-async", "client-busrt-async", "client-local-async",
-    "dep:is-terminal", "dep:bumpalo"]
+    "dep:is-terminal", "dep:bumpalo", "dep:openssl"]
 client-sync = []
 client-async = ["dep:tokio", "dep:simple-pool", "dep:async-trait"]
 client-busrt-async = ["dep:busrt", "client-async", "dep:async-trait"]
